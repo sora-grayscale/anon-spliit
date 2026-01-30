@@ -2,6 +2,7 @@ import dayjs from 'dayjs'
 import { useCallback, useEffect, useState } from 'react'
 import useSWR, { Fetcher } from 'swr'
 import { base64ToKey, generateMasterKey, keyToBase64 } from './crypto'
+import { safeGetItem } from './storage'
 
 export function useMediaQuery(query: string): boolean {
   const getMatches = (query: string): boolean => {
@@ -60,7 +61,7 @@ export function useActiveUser(groupId?: string) {
 
   useEffect(() => {
     if (groupId) {
-      const activeUser = localStorage.getItem(`${groupId}-activeUser`)
+      const activeUser = safeGetItem(`${groupId}-activeUser`)
       if (activeUser) setActiveUser(activeUser)
     }
   }, [groupId])

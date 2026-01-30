@@ -178,7 +178,11 @@ export function PasswordPrompt({
 
       // Save to localStorage for this group
       const keyBase64 = keyToBase64(finalKey)
-      localStorage.setItem(`spliit-e2ee-key-${groupId}`, keyBase64)
+      try {
+        localStorage.setItem(`spliit-e2ee-key-${groupId}`, keyBase64)
+      } catch {
+        // localStorage not available - continue without saving
+      }
 
       // Also save password-derived key separately for session
       sessionStorage.setItem(

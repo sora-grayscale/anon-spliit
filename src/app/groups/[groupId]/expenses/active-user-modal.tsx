@@ -19,6 +19,7 @@ import {
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { useMediaQuery } from '@/lib/hooks'
+import { safeGetItem, safeSetItem } from '@/lib/storage'
 import { cn } from '@/lib/utils'
 import { AppRouterOutput } from '@/trpc/routers/_app'
 import { useTranslations } from 'next-intl'
@@ -35,8 +36,8 @@ export function ActiveUserModal({ groupId }: { groupId: string }) {
   useEffect(() => {
     if (!group) return
 
-    const tempUser = localStorage.getItem(`newGroup-activeUser`)
-    const activeUser = localStorage.getItem(`${group.id}-activeUser`)
+    const tempUser = safeGetItem(`newGroup-activeUser`)
+    const activeUser = safeGetItem(`${group.id}-activeUser`)
     if (!tempUser && !activeUser) {
       setOpen(true)
     }
@@ -45,8 +46,8 @@ export function ActiveUserModal({ groupId }: { groupId: string }) {
   function updateOpen(open: boolean) {
     if (!group) return
 
-    if (!open && !localStorage.getItem(`${group.id}-activeUser`)) {
-      localStorage.setItem(`${group.id}-activeUser`, 'None')
+    if (!open && !safeGetItem(`${group.id}-activeUser`)) {
+      safeSetItem(`${group.id}-activeUser`, 'None')
     }
     setOpen(open)
   }
@@ -110,7 +111,7 @@ function ActiveUserForm({
         if (!group) return
 
         event.preventDefault()
-        localStorage.setItem(`${group.id}-activeUser`, selected)
+        safeSetItem(`${group.id}-activeUser`, selected)
         close()
       }}
     >
