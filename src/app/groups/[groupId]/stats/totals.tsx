@@ -2,6 +2,7 @@
 import { TotalsGroupSpending } from '@/app/groups/[groupId]/stats/totals-group-spending'
 import { TotalsYourShare } from '@/app/groups/[groupId]/stats/totals-your-share'
 import { TotalsYourSpendings } from '@/app/groups/[groupId]/stats/totals-your-spending'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useActiveUser, useBalances } from '@/lib/hooks'
 import {
@@ -10,13 +11,16 @@ import {
   getTotalGroupSpending,
 } from '@/lib/totals'
 import { getCurrencyFromGroup } from '@/lib/utils'
+import { AlertCircle } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import { useMemo } from 'react'
 import { useCurrentGroup } from '../current-group-context'
 
 export function Totals() {
   const { groupId, group } = useCurrentGroup()
   const activeUser = useActiveUser(groupId)
-  const { expenses, isLoading } = useBalances(groupId)
+  const { expenses, isLoading, decryptionError } = useBalances(groupId)
+  const t = useTranslations('Balances')
 
   const participantId =
     activeUser && activeUser !== 'None' ? activeUser : undefined
@@ -41,6 +45,17 @@ export function Totals() {
         : undefined,
     }
   }, [expenses, participantId])
+
+  // Issue #80: Show error if decryption failed
+  if (decryptionError) {
+    return (
+      <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>{t('decryptionError.title')}</AlertTitle>
+        <AlertDescription>{t('decryptionError.description')}</AlertDescription>
+      </Alert>
+    )
+  }
 
   if (isLoading || !group)
     return (

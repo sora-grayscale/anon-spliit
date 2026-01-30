@@ -312,6 +312,10 @@
   "Balances": {
     "title": "残高",
     "description": "これは各参加者が支払ったまたは支払われた金額です。",
+    "decryptionError": {
+      "title": "残高を計算できません",
+      "description": "支出データを復号できませんでした。URLに正しい暗号化キーが含まれているか確認してください。"
+    },
     "Reimbursements": {
       "title": "提案される払い戻し",
       "description": "参加者間の最適化された払い戻しの提案です。",

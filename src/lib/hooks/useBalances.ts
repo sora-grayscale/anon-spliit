@@ -28,11 +28,14 @@ export function useBalances(groupId: string) {
   // Handle async decryption
   const [decryptedExpenses, setDecryptedExpenses] =
     useState<typeof rawExpenses>(undefined)
+  // Track decryption errors to show user feedback (Issue #80)
+  const [decryptionError, setDecryptionError] = useState<Error | null>(null)
   const lastDecryptedRef = useRef<{ key: string; withKey: boolean } | null>(
     null,
   )
 
   useEffect(() => {
+    let isMounted = true
     const expenseIds = rawExpenses?.map((e) => e.id).join(',') || ''
     const shouldDecryptWithKey = hasKey && encryptionKey !== null
 
@@ -46,14 +49,20 @@ export function useBalances(groupId: string) {
 
     async function decrypt() {
       if (!rawExpenses) {
-        setDecryptedExpenses(undefined)
+        if (isMounted) {
+          setDecryptedExpenses(undefined)
+          setDecryptionError(null)
+        }
         return
       }
 
-      // If no encryption key, use original data
+      // If no encryption key, use original data (unencrypted group)
       if (!isKeyLoading && !hasKey) {
-        setDecryptedExpenses(rawExpenses)
-        lastDecryptedRef.current = { key: expenseIds, withKey: false }
+        if (isMounted) {
+          setDecryptedExpenses(rawExpenses)
+          setDecryptionError(null)
+          lastDecryptedRef.current = { key: expenseIds, withKey: false }
+        }
         return
       }
 
@@ -63,19 +72,34 @@ export function useBalances(groupId: string) {
 
       try {
         const decrypted = await decryptExpenses(rawExpenses, encryptionKey)
-        setDecryptedExpenses(decrypted)
-        lastDecryptedRef.current = { key: expenseIds, withKey: true }
+        if (isMounted) {
+          setDecryptedExpenses(decrypted)
+          setDecryptionError(null)
+          lastDecryptedRef.current = { key: expenseIds, withKey: true }
+        }
       } catch (error) {
-        console.warn(
+        // Issue #80: Don't fall back to encrypted data - it causes wrong balance calculations
+        console.error(
           'Failed to decrypt expenses for balance calculation:',
           error,
         )
-        setDecryptedExpenses(rawExpenses)
-        lastDecryptedRef.current = { key: expenseIds, withKey: true }
+        if (isMounted) {
+          setDecryptedExpenses([]) // Use empty array, not encrypted data
+          setDecryptionError(
+            error instanceof Error
+              ? error
+              : new Error('Failed to decrypt expense data'),
+          )
+          lastDecryptedRef.current = { key: expenseIds, withKey: true }
+        }
       }
     }
 
     decrypt()
+
+    return () => {
+      isMounted = false
+    }
   }, [rawExpenses, encryptionKey, isKeyLoading, hasKey])
 
   // Calculate balances from decrypted expenses
@@ -102,5 +126,7 @@ export function useBalances(groupId: string) {
     reimbursements,
     isLoading,
     expenses: decryptedExpenses,
+    // Issue #80: Expose decryption error for UI feedback
+    decryptionError,
   }
 }
