@@ -13,9 +13,6 @@ jest.mock('./prisma', () => ({
       updateMany: jest.fn(),
       deleteMany: jest.fn(),
     },
-    activity: {
-      findFirst: jest.fn(),
-    },
   },
 }))
 
@@ -28,7 +25,6 @@ import { prisma } from './prisma'
 
 // Get typed mock reference
 const mockGroup = prisma.group as jest.Mocked<typeof prisma.group>
-const mockActivity = prisma.activity as jest.Mocked<typeof prisma.activity>
 
 describe('Auto-delete functionality', () => {
   beforeEach(() => {
@@ -44,7 +40,15 @@ describe('Auto-delete functionality', () => {
       expect(result).toEqual([])
       expect(mockGroup.findMany).toHaveBeenCalledWith({
         where: { deletedAt: null },
-        select: { id: true, createdAt: true },
+        select: {
+          id: true,
+          createdAt: true,
+          activities: {
+            orderBy: { time: 'desc' },
+            take: 1,
+            select: { time: true },
+          },
+        },
       })
     })
 
@@ -55,16 +59,16 @@ describe('Auto-delete functionality', () => {
 
       const recentDate = new Date(now)
       recentDate.setDate(recentDate.getDate() - 10) // 10 days ago
-      ;(mockGroup.findMany as jest.Mock).mockResolvedValue([
-        { id: 'inactive-group', createdAt: oldDate },
-        { id: 'active-group', createdAt: oldDate },
-      ])
 
-      // First call for inactive-group - no activity
-      // Second call for active-group - recent activity
-      ;(mockActivity.findFirst as jest.Mock)
-        .mockResolvedValueOnce(null) // inactive-group has no activity
-        .mockResolvedValueOnce({ time: recentDate }) // active-group has recent activity
+      // Groups with their activities included in a single query
+      ;(mockGroup.findMany as jest.Mock).mockResolvedValue([
+        { id: 'inactive-group', createdAt: oldDate, activities: [] }, // no activity
+        {
+          id: 'active-group',
+          createdAt: oldDate,
+          activities: [{ time: recentDate }],
+        }, // recent activity
+      ])
 
       const result = await getInactiveGroups(90)
 
@@ -76,9 +80,8 @@ describe('Auto-delete functionality', () => {
       const oldCreationDate = new Date(now)
       oldCreationDate.setDate(oldCreationDate.getDate() - 100) // 100 days ago
       ;(mockGroup.findMany as jest.Mock).mockResolvedValue([
-        { id: 'old-group', createdAt: oldCreationDate },
+        { id: 'old-group', createdAt: oldCreationDate, activities: [] },
       ])
-      ;(mockActivity.findFirst as jest.Mock).mockResolvedValue(null)
 
       const result = await getInactiveGroups(90)
 
@@ -90,11 +93,12 @@ describe('Auto-delete functionality', () => {
       const recentActivity = new Date(now)
       recentActivity.setDate(recentActivity.getDate() - 30) // 30 days ago
       ;(mockGroup.findMany as jest.Mock).mockResolvedValue([
-        { id: 'recent-group', createdAt: new Date('2020-01-01') },
+        {
+          id: 'recent-group',
+          createdAt: new Date('2020-01-01'),
+          activities: [{ time: recentActivity }],
+        },
       ])
-      ;(mockActivity.findFirst as jest.Mock).mockResolvedValue({
-        time: recentActivity,
-      })
 
       const result = await getInactiveGroups(90)
 
@@ -122,10 +126,9 @@ describe('Auto-delete functionality', () => {
       const oldDate = new Date(now)
       oldDate.setDate(oldDate.getDate() - 100)
       ;(mockGroup.findMany as jest.Mock).mockResolvedValue([
-        { id: 'inactive-1', createdAt: oldDate },
-        { id: 'inactive-2', createdAt: oldDate },
+        { id: 'inactive-1', createdAt: oldDate, activities: [] },
+        { id: 'inactive-2', createdAt: oldDate, activities: [] },
       ])
-      ;(mockActivity.findFirst as jest.Mock).mockResolvedValue(null)
       ;(mockGroup.updateMany as jest.Mock).mockResolvedValue({ count: 2 })
 
       const result = await autoDeleteInactiveGroups(90)
@@ -214,23 +217,23 @@ describe('Auto-delete functionality', () => {
       const group2Activity = new Date(now)
       group2Activity.setDate(group2Activity.getDate() - 10)
 
-      // Step 1: getInactiveGroups
+      // Step 1: getInactiveGroups - single query returns groups with activities
       ;(mockGroup.findMany as jest.Mock).mockResolvedValueOnce([
-        { id: 'group-1', createdAt: group1CreatedAt },
-        { id: 'group-2', createdAt: group1CreatedAt },
+        { id: 'group-1', createdAt: group1CreatedAt, activities: [] }, // no activity
+        {
+          id: 'group-2',
+          createdAt: group1CreatedAt,
+          activities: [{ time: group2Activity }],
+        }, // recent activity
       ])
-      ;(mockActivity.findFirst as jest.Mock)
-        .mockResolvedValueOnce(null) // group-1 has no activity
-        .mockResolvedValueOnce({ time: group2Activity }) // group-2 has recent activity
 
       const inactiveGroups = await getInactiveGroups(90)
       expect(inactiveGroups).toEqual(['group-1'])
 
       // Step 2: autoDeleteInactiveGroups - reset mocks and set up for this call
       ;(mockGroup.findMany as jest.Mock).mockResolvedValueOnce([
-        { id: 'group-1', createdAt: group1CreatedAt },
+        { id: 'group-1', createdAt: group1CreatedAt, activities: [] },
       ])
-      ;(mockActivity.findFirst as jest.Mock).mockResolvedValueOnce(null)
       ;(mockGroup.updateMany as jest.Mock).mockResolvedValue({ count: 1 })
 
       const softDeleteResult = await autoDeleteInactiveGroups(90)
@@ -244,6 +247,28 @@ describe('Auto-delete functionality', () => {
 
       const cleanupResult = await cleanupExpiredGroups(7)
       expect(cleanupResult.permanentlyDeleted).toBe(1)
+    })
+  })
+
+  describe('N+1 query optimization (Issue #46)', () => {
+    it('should fetch groups with activities in a single query', async () => {
+      const now = new Date()
+      const oldDate = new Date(now)
+      oldDate.setDate(oldDate.getDate() - 100)
+
+      // Create 100 groups to verify single query behavior
+      const groups = Array.from({ length: 100 }, (_, i) => ({
+        id: `group-${i}`,
+        createdAt: oldDate,
+        activities: [],
+      }))
+
+      ;(mockGroup.findMany as jest.Mock).mockResolvedValue(groups)
+
+      await getInactiveGroups(90)
+
+      // Should only call findMany once, not 100+1 times
+      expect(mockGroup.findMany).toHaveBeenCalledTimes(1)
     })
   })
 })

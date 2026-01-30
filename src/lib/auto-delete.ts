@@ -19,7 +19,8 @@ export async function getInactiveGroups(
   const cutoffDate = new Date()
   cutoffDate.setDate(cutoffDate.getDate() - inactiveDays)
 
-  // Get all groups that are not deleted
+  // Get all groups with their latest activity in a single query
+  // This avoids the N+1 query problem by using Prisma's include with take: 1
   const activeGroups = await prisma.group.findMany({
     where: {
       deletedAt: null,
@@ -27,27 +28,24 @@ export async function getInactiveGroups(
     select: {
       id: true,
       createdAt: true,
+      activities: {
+        orderBy: {
+          time: 'desc',
+        },
+        take: 1,
+        select: {
+          time: true,
+        },
+      },
     },
   })
 
-  // For each group, check if there's any activity after the cutoff date
+  // Filter groups by their last activity time
   const inactiveGroupIds: string[] = []
 
   for (const group of activeGroups) {
-    const latestActivity = await prisma.activity.findFirst({
-      where: {
-        groupId: group.id,
-      },
-      orderBy: {
-        time: 'desc',
-      },
-      select: {
-        time: true,
-      },
-    })
-
     // Use the latest activity time, or group creation time if no activity exists
-    const lastActivityTime = latestActivity?.time ?? group.createdAt
+    const lastActivityTime = group.activities[0]?.time ?? group.createdAt
 
     if (lastActivityTime < cutoffDate) {
       inactiveGroupIds.push(group.id)
