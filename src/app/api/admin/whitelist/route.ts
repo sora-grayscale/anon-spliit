@@ -9,10 +9,11 @@ import { randomBytes } from 'crypto'
 import { NextResponse } from 'next/server'
 
 /**
- * Generate a random initial password
+ * Generate a random initial password with sufficient entropy (Issue #48)
+ * Uses 16 bytes (128 bits) of random data for cryptographic strength
  */
 function generateInitialPassword(): string {
-  return randomBytes(8).toString('base64').slice(0, 12)
+  return randomBytes(16).toString('base64url').slice(0, 20)
 }
 
 export async function POST(request: Request) {
