@@ -23,6 +23,8 @@ export const EditGroup = () => {
 
   // Decrypt group data when both data and key are available
   useEffect(() => {
+    let isMounted = true // Track if component is still mounted (Issue #53)
+
     const shouldDecryptWithKey = hasKey && encryptionKey !== null
 
     // Skip if already processed with same state
@@ -36,14 +38,16 @@ export const EditGroup = () => {
 
     async function decrypt() {
       if (!data?.group) {
-        setDecryptedGroup(undefined)
+        if (isMounted) setDecryptedGroup(undefined)
         return
       }
 
       // If no encryption key, use original data
       if (!isKeyLoading && !hasKey) {
-        setDecryptedGroup(data)
-        lastDecryptedRef.current = { id: data.group.id, withKey: false }
+        if (isMounted) {
+          setDecryptedGroup(data)
+          lastDecryptedRef.current = { id: data.group.id, withKey: false }
+        }
         return
       }
 
@@ -53,19 +57,27 @@ export const EditGroup = () => {
 
       try {
         const decrypted = await decryptGroup(data.group, encryptionKey)
-        setDecryptedGroup({
-          ...data,
-          group: decrypted,
-        })
-        lastDecryptedRef.current = { id: data.group.id, withKey: true }
+        if (isMounted) {
+          setDecryptedGroup({
+            ...data,
+            group: decrypted,
+          })
+          lastDecryptedRef.current = { id: data.group.id, withKey: true }
+        }
       } catch (error) {
         console.warn('Failed to decrypt group for editing:', error)
-        setDecryptedGroup(data)
-        lastDecryptedRef.current = { id: data.group.id, withKey: true }
+        if (isMounted) {
+          setDecryptedGroup(data)
+          lastDecryptedRef.current = { id: data.group.id, withKey: true }
+        }
       }
     }
 
     decrypt()
+
+    return () => {
+      isMounted = false
+    }
   }, [data?.group?.id, encryptionKey, isKeyLoading, hasKey, data])
 
   const isLoading = isQueryLoading || isKeyLoading || !decryptedGroup
