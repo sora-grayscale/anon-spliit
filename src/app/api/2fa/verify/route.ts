@@ -113,17 +113,11 @@ export async function POST(request: Request) {
     }
 
     // 3. Check if twoFactorEnabled is true
-    if (!user.twoFactorEnabled) {
+    // Return generic error to prevent user enumeration (Issue #42)
+    if (!user.twoFactorEnabled || !user.twoFactorSecret) {
       return NextResponse.json(
-        { error: '2FA is not enabled for this account' },
-        { status: 400 },
-      )
-    }
-
-    if (!user.twoFactorSecret) {
-      return NextResponse.json(
-        { error: '2FA secret not found' },
-        { status: 500 },
+        { error: 'Invalid email or token' },
+        { status: 401 },
       )
     }
 
