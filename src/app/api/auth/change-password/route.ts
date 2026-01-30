@@ -1,18 +1,47 @@
 /**
  * Password Change API (Issue #4)
+ *
+ * Rate limiting added for brute force protection (Issue #43)
  */
 
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import {
+  checkRateLimit,
+  clearAttempts,
+  recordFailedAttempt,
+} from '@/lib/rate-limit'
 import bcrypt from 'bcryptjs'
 import { NextResponse } from 'next/server'
+
+// Rate limit key prefix for password change attempts
+const RATE_LIMIT_PREFIX = 'password-change:'
 
 export async function POST(request: Request) {
   try {
     const session = await auth()
 
-    if (!session?.user) {
+    if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Check rate limit before processing (Issue #43)
+    const rateLimitKey = `${RATE_LIMIT_PREFIX}${session.user.email}`
+    const rateLimitResult = checkRateLimit(rateLimitKey)
+
+    if (rateLimitResult.isLimited) {
+      return NextResponse.json(
+        {
+          error: 'Too many password change attempts. Please try again later.',
+          retryAfter: rateLimitResult.retryAfter,
+        },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(rateLimitResult.retryAfter || 60),
+          },
+        },
+      )
     }
 
     const body = (await request.json()) as {
@@ -68,6 +97,8 @@ export async function POST(request: Request) {
     // Verify current password
     const isValidPassword = await bcrypt.compare(currentPassword, userPassword)
     if (!isValidPassword) {
+      // Record failed attempt for rate limiting (Issue #43)
+      recordFailedAttempt(rateLimitKey)
       return NextResponse.json(
         { error: 'Current password is incorrect' },
         { status: 400 },
@@ -95,6 +126,9 @@ export async function POST(request: Request) {
         },
       })
     }
+
+    // Clear rate limit attempts on successful password change (Issue #43)
+    clearAttempts(rateLimitKey)
 
     return NextResponse.json({ success: true })
   } catch (error) {
