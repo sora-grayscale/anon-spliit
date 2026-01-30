@@ -43,6 +43,12 @@ import {
   SplittingOptions,
   expenseFormSchema,
 } from '@/lib/schemas'
+import {
+  safeGetItem,
+  safeGetJSON,
+  safeRemoveItem,
+  safeSetJSON,
+} from '@/lib/storage'
 import { calculateShare } from '@/lib/totals'
 import {
   amountAsDecimal,
@@ -86,13 +92,11 @@ const getDefaultSplittingOptions = (
   }
 
   if (typeof localStorage === 'undefined') return defaultValue
-  const defaultSplitMode = localStorage.getItem(
+  const parsedDefaultSplitMode = safeGetJSON<SplittingOptions | null>(
     `${group.id}-defaultSplittingOptions`,
+    null,
   )
-  if (defaultSplitMode === null) return defaultValue
-  const parsedDefaultSplitMode = JSON.parse(
-    defaultSplitMode,
-  ) as SplittingOptions
+  if (parsedDefaultSplitMode === null) return defaultValue
 
   if (parsedDefaultSplitMode.paidFor === null) {
     parsedDefaultSplitMode.paidFor = defaultValue.paidFor
@@ -104,7 +108,7 @@ const getDefaultSplittingOptions = (
     if (
       !group.participants.some(({ id }) => id === parsedPaidFor.participant)
     ) {
-      localStorage.removeItem(`${group.id}-defaultSplittingOptions`)
+      safeRemoveItem(`${group.id}-defaultSplittingOptions`)
       return defaultValue
     }
   }
@@ -128,7 +132,10 @@ async function persistDefaultSplittingOptions(
   groupId: string,
   expenseFormValues: ExpenseFormValues,
 ) {
-  if (localStorage && expenseFormValues.saveDefaultSplittingOptions) {
+  if (
+    typeof localStorage !== 'undefined' &&
+    expenseFormValues.saveDefaultSplittingOptions
+  ) {
     const computePaidFor = (): SplittingOptions['paidFor'] => {
       if (expenseFormValues.splitMode === 'EVENLY') {
         return expenseFormValues.paidFor.map(({ participant }) => ({
@@ -147,10 +154,7 @@ async function persistDefaultSplittingOptions(
       paidFor: computePaidFor(),
     } satisfies SplittingOptions
 
-    localStorage.setItem(
-      `${groupId}-defaultSplittingOptions`,
-      JSON.stringify(splittingOptions),
-    )
+    safeSetJSON(`${groupId}-defaultSplittingOptions`, splittingOptions)
   }
 }
 
@@ -176,7 +180,7 @@ export function ExpenseForm({
 
   const getSelectedPayer = (field?: { value: string }) => {
     if (isCreate && typeof window !== 'undefined') {
-      const activeUser = localStorage.getItem(`${group.id}-activeUser`)
+      const activeUser = safeGetItem(`${group.id}-activeUser`)
       if (activeUser && activeUser !== 'None' && field?.value === undefined) {
         return activeUser
       }

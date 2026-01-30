@@ -35,6 +35,7 @@ import { getGroup } from '@/lib/api'
 import { generateSecurePassword, validatePasswordStrength } from '@/lib/crypto'
 import { defaultCurrencyList, getCurrency } from '@/lib/currency'
 import { GroupFormValues, groupFormSchema } from '@/lib/schemas'
+import { safeGetItem, safeSetItem } from '@/lib/storage'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Eye, EyeOff, KeyRound, RefreshCw, Save, Trash2 } from 'lucide-react'
 import { useLocale, useTranslations } from 'next-intl'
@@ -97,9 +98,8 @@ export function GroupForm({
   useEffect(() => {
     if (activeUser === null) {
       const currentActiveUser =
-        fields.find(
-          (f) => f.id === localStorage.getItem(`${group?.id}-activeUser`),
-        )?.name || t('Settings.ActiveUserField.none')
+        fields.find((f) => f.id === safeGetItem(`${group?.id}-activeUser`))
+          ?.name || t('Settings.ActiveUserField.none')
       setActiveUser(currentActiveUser)
     }
   }, [t, activeUser, fields, group?.id])
@@ -124,12 +124,12 @@ export function GroupForm({
     if (group?.id) {
       const participant = group.participants.find((p) => p.name === activeUser)
       if (participant?.id) {
-        localStorage.setItem(`${group.id}-activeUser`, participant.id)
+        safeSetItem(`${group.id}-activeUser`, participant.id)
       } else {
-        localStorage.setItem(`${group.id}-activeUser`, activeUser)
+        safeSetItem(`${group.id}-activeUser`, activeUser)
       }
     } else {
-      localStorage.setItem('newGroup-activeUser', activeUser)
+      safeSetItem('newGroup-activeUser', activeUser)
     }
   }
 

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { SearchBar } from '@/components/ui/search-bar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { decryptExpenses } from '@/lib/encrypt-helpers'
+import { safeGetItem, safeRemoveItem, safeSetItem } from '@/lib/storage'
 import { getCurrencyFromGroup } from '@/lib/utils'
 import { trpc } from '@/trpc/client'
 import dayjs, { type Dayjs } from 'dayjs'
@@ -70,19 +71,19 @@ export function ExpenseList() {
   useEffect(() => {
     if (!participants) return
 
-    const activeUser = localStorage.getItem('newGroup-activeUser')
-    const newUser = localStorage.getItem(`${groupId}-newUser`)
+    const activeUser = safeGetItem('newGroup-activeUser')
+    const newUser = safeGetItem(`${groupId}-newUser`)
     if (activeUser || newUser) {
-      localStorage.removeItem('newGroup-activeUser')
-      localStorage.removeItem(`${groupId}-newUser`)
+      safeRemoveItem('newGroup-activeUser')
+      safeRemoveItem(`${groupId}-newUser`)
       if (activeUser === 'None') {
-        localStorage.setItem(`${groupId}-activeUser`, 'None')
+        safeSetItem(`${groupId}-activeUser`, 'None')
       } else {
         const userId = participants.find(
           (p) => p.name === (activeUser || newUser),
         )?.id
         if (userId) {
-          localStorage.setItem(`${groupId}-activeUser`, userId)
+          safeSetItem(`${groupId}-activeUser`, userId)
         }
       }
     }
