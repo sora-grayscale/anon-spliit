@@ -1,4 +1,8 @@
 import { auth, isPrivateInstance } from '@/lib/auth'
+import {
+  checkOperationRateLimit,
+  recordOperationAttempt,
+} from '@/lib/rate-limit'
 import { Prisma } from '@prisma/client'
 import { initTRPC, TRPCError } from '@trpc/server'
 import { cache } from 'react'
@@ -113,3 +117,56 @@ export const adminProcedure = t.procedure.use(async ({ ctx, next }) => {
   }
   return next({ ctx })
 })
+
+/**
+ * Rate limiting middleware factory (Issue #78)
+ * Creates a middleware that rate limits operations by a key extracted from input
+ *
+ * @param operation - Operation name for the rate limit key (e.g., 'delete', 'create-expense')
+ * @param maxAttempts - Maximum attempts allowed in the window
+ * @param windowMs - Time window in milliseconds
+ * @param getKey - Function to extract the rate limit key from input (default: uses groupId)
+ */
+export function createRateLimitMiddleware<TInput extends { groupId: string }>(
+  operation: string,
+  maxAttempts: number,
+  windowMs: number,
+) {
+  return t.middleware(async ({ input, next }) => {
+    const typedInput = input as TInput
+    const key = `${operation}:${typedInput.groupId}`
+
+    // Check rate limit
+    const { isLimited, retryAfter } = checkOperationRateLimit(
+      key,
+      maxAttempts,
+      windowMs,
+    )
+
+    if (isLimited) {
+      throw new TRPCError({
+        code: 'TOO_MANY_REQUESTS',
+        message: `Too many ${operation} attempts. Please try again in ${retryAfter} seconds.`,
+      })
+    }
+
+    // Record attempt before executing
+    recordOperationAttempt(key, maxAttempts, windowMs)
+
+    return next()
+  })
+}
+
+/**
+ * Rate-limited public procedure factory
+ * Creates a procedure with rate limiting applied
+ */
+export function createRateLimitedProcedure(
+  operation: string,
+  maxAttempts: number,
+  windowMs: number,
+) {
+  return publicProcedure.use(
+    createRateLimitMiddleware(operation, maxAttempts, windowMs),
+  )
+}
