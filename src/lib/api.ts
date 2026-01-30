@@ -552,6 +552,8 @@ export async function logActivity(
   })
 }
 
+const MAX_RETRY_COUNT = 3
+
 async function createRecurringExpenses() {
   const localDate = new Date() // Current local date
   const utcDateFromLocal = new Date(
@@ -571,6 +573,10 @@ async function createRecurringExpenses() {
         nextExpenseCreatedAt: null,
         nextExpenseDate: {
           lte: utcDateFromLocal,
+        },
+        // Skip links that have exceeded retry count (Issue #82)
+        retryCount: {
+          lt: MAX_RETRY_COUNT,
         },
       },
       include: {
@@ -665,15 +671,38 @@ async function createRecurringExpenses() {
 
           return newExpense
         })
-        .catch(() => {
+        .catch(async (error) => {
+          const errorMessage =
+            error instanceof Error ? error.message : 'Unknown error'
           console.error(
-            'Failed to created recurringExpense for expenseId: %s',
+            'Failed to create recurringExpense for expenseId: %s, error: %s',
             currentExpenseRecord.id,
+            errorMessage,
           )
+
+          // Record error in database for tracking (Issue #82)
+          try {
+            await prisma.recurringExpenseLink.update({
+              where: { id: currentReccuringExpenseLinkId },
+              data: {
+                lastError: errorMessage.substring(0, 500), // Limit error message length
+                lastErrorAt: new Date(),
+                retryCount: { increment: 1 },
+              },
+            })
+          } catch (updateError) {
+            console.error(
+              'Failed to update error tracking for recurringExpenseLink: %s',
+              currentReccuringExpenseLinkId,
+              updateError,
+            )
+          }
+
           return null
         })
 
       // If the new expense failed to be created, break out of the while-loop
+      // The error has been recorded and will be retried on next cron run (Issue #82)
       if (newExpense === null) break
 
       // Set the values for the next iteration of the for-loop in case multiple recurring Expenses need to be created

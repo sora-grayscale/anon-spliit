@@ -105,11 +105,16 @@ model RecurringExpenseLink {
   currentFrameExpense   Expense @relation(fields: [currentFrameExpenseId], references: [id], onDelete: Cascade)
   currentFrameExpenseId String  @unique
 
-  // Note: We do not want to link to the next expense because once it is created, it should be 
+  // Note: We do not want to link to the next expense because once it is created, it should be
   // treated as it's own independent entity. This means that if a user wants to delete an Expense
   // and any prior related recurring expenses, they'll need to delete them one by one.
   nextExpenseCreatedAt DateTime?
   nextExpenseDate      DateTime
+
+  // Error tracking for failed recurring expense creation (Issue #82)
+  lastError   String?
+  lastErrorAt DateTime?
+  retryCount  Int       @default(0)
 
   @@index([groupId])
   @@index([groupId, nextExpenseCreatedAt, nextExpenseDate(sort: Desc)])
