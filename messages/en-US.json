@@ -313,10 +313,14 @@
   "Balances": {
     "title": "Balances",
     "description": "This is the amount that each participant paid or was paid for.",
+    "decryptionError": {
+      "title": "Unable to calculate balances",
+      "description": "Could not decrypt expense data. Please check that you have the correct encryption key in your URL."
+    },
     "Reimbursements": {
       "title": "Suggested reimbursements",
       "description": "Here are suggestions for optimized reimbursements between participants.",
-      "noImbursements": "It looks like your group doesn’t need any reimbursement 😁",
+      "noImbursements": "It looks like your group doesn't need any reimbursement 😁",
       "owes": "<strong>{from}</strong> owes <strong>{to}</strong>",
       "markAsPaid": "Mark as paid"
     }

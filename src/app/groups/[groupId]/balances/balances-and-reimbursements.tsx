@@ -2,6 +2,7 @@
 
 import { BalancesList } from '@/app/groups/[groupId]/balances-list'
 import { ReimbursementList } from '@/app/groups/[groupId]/reimbursement-list'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import {
   Card,
   CardContent,
@@ -13,6 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useBalances } from '@/lib/hooks/useBalances'
 import { getCurrencyFromGroup } from '@/lib/utils'
 import { trpc } from '@/trpc/client'
+import { AlertCircle } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { Fragment, useEffect } from 'react'
 import { match } from 'ts-pattern'
@@ -27,6 +29,7 @@ export default function BalancesAndReimbursements() {
     balances,
     reimbursements,
     isLoading: balancesAreLoading,
+    decryptionError,
   } = useBalances(groupId)
 
   const t = useTranslations('Balances')
@@ -38,6 +41,17 @@ export default function BalancesAndReimbursements() {
   }, [utils])
 
   const isLoading = balancesAreLoading || !group
+
+  // Issue #80: Show error if decryption failed
+  if (decryptionError) {
+    return (
+      <Alert variant="destructive" className="mb-4">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>{t('decryptionError.title')}</AlertTitle>
+        <AlertDescription>{t('decryptionError.description')}</AlertDescription>
+      </Alert>
+    )
+  }
 
   return (
     <>
