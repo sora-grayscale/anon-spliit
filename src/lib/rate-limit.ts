@@ -508,3 +508,100 @@ export function getStorageType(): string {
   if (storage instanceof MemoryStorage) return 'memory'
   return STORAGE_TYPE // Not yet initialized
 }
+
+// ============================================================
+// Operation Rate Limiting (Issue #78)
+// For rate limiting tRPC operations like delete, create, etc.
+// ============================================================
+
+/**
+ * In-memory storage for operation rate limiting
+ * Separate from auth rate limiting to avoid conflicts
+ */
+const operationAttempts = new Map<string, AttemptRecord>()
+
+// Cleanup old operation attempts periodically
+if (typeof window === 'undefined') {
+  setInterval(
+    () => {
+      const now = Date.now()
+      const keysToDelete: string[] = []
+      operationAttempts.forEach((record, key) => {
+        // Extract windowMs from key suffix or use default
+        const windowMs = 60 * 60 * 1000 // 1 hour default
+        if (now - record.firstAttempt > windowMs) {
+          keysToDelete.push(key)
+        }
+      })
+      keysToDelete.forEach((key) => operationAttempts.delete(key))
+    },
+    5 * 60 * 1000,
+  ) // Every 5 minutes
+}
+
+/**
+ * Check if an operation is rate limited
+ * @param key Unique key for the operation (e.g., "delete:groupId")
+ * @param maxAttempts Maximum attempts allowed in the window
+ * @param windowMs Time window in milliseconds
+ * @returns Object with isLimited flag and optional retryAfter (seconds)
+ */
+export function checkOperationRateLimit(
+  key: string,
+  maxAttempts: number,
+  windowMs: number,
+): {
+  isLimited: boolean
+  retryAfter?: number
+  remainingAttempts?: number
+} {
+  const now = Date.now()
+  const record = operationAttempts.get(key)
+
+  if (!record) {
+    return { isLimited: false, remainingAttempts: maxAttempts }
+  }
+
+  // Check if window has expired (reset attempts)
+  if (now - record.firstAttempt > windowMs) {
+    operationAttempts.delete(key)
+    return { isLimited: false, remainingAttempts: maxAttempts }
+  }
+
+  // Check if max attempts reached
+  if (record.count >= maxAttempts) {
+    const retryAfter = Math.ceil((record.firstAttempt + windowMs - now) / 1000)
+    return {
+      isLimited: true,
+      retryAfter,
+    }
+  }
+
+  return {
+    isLimited: false,
+    remainingAttempts: maxAttempts - record.count,
+  }
+}
+
+/**
+ * Record an operation attempt
+ * @param key Unique key for the operation (e.g., "delete:groupId")
+ * @param maxAttempts Maximum attempts allowed (for reference)
+ * @param windowMs Time window in milliseconds
+ */
+export function recordOperationAttempt(
+  key: string,
+  _maxAttempts: number,
+  windowMs: number,
+): void {
+  const now = Date.now()
+  const record = operationAttempts.get(key)
+
+  if (!record || now - record.firstAttempt > windowMs) {
+    // Start new window
+    operationAttempts.set(key, { count: 1, firstAttempt: now })
+  } else {
+    // Increment counter
+    record.count++
+  }
+}

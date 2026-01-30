@@ -1,11 +1,18 @@
 import { restoreGroup } from '@/lib/api'
-import { publicProcedure } from '@/trpc/init'
+import { createRateLimitedProcedure } from '@/trpc/init'
 import { z } from 'zod'
 
-export const restoreGroupProcedure = publicProcedure
+// Rate limit: 10 restore attempts per hour per groupId (Issue #78)
+const HOUR_MS = 60 * 60 * 1000
+
+export const restoreGroupProcedure = createRateLimitedProcedure(
+  'restore',
+  10,
+  HOUR_MS,
+)
   .input(
     z.object({
-      groupId: z.string().min(1),
+      groupId: z.string().min(1).max(30),
     }),
   )
   .mutation(async ({ input: { groupId } }) => {

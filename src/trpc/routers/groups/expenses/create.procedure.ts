@@ -1,12 +1,19 @@
 import { createExpense } from '@/lib/api'
 import { expenseFormSchema } from '@/lib/schemas'
-import { publicProcedure } from '@/trpc/init'
+import { createRateLimitedProcedure } from '@/trpc/init'
 import { z } from 'zod'
 
-export const createGroupExpenseProcedure = publicProcedure
+// Rate limit: 100 expense creations per hour per groupId (Issue #78)
+const HOUR_MS = 60 * 60 * 1000
+
+export const createGroupExpenseProcedure = createRateLimitedProcedure(
+  'create-expense',
+  100,
+  HOUR_MS,
+)
   .input(
     z.object({
-      groupId: z.string().min(1),
+      groupId: z.string().min(1).max(30),
       expenseFormValues: expenseFormSchema,
       participantId: z.string().optional(),
     }),
