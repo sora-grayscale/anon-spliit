@@ -5,7 +5,7 @@ import { z } from 'zod'
 export const listGroupsProcedure = publicProcedure
   .input(
     z.object({
-      groupIds: z.array(z.string().min(1)),
+      groupIds: z.array(z.string().min(1).max(30)).max(100),
     }),
   )
   .query(async ({ input: { groupIds } }) => {
