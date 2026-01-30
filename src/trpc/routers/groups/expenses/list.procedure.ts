@@ -1,8 +1,8 @@
 import { getGroupExpenses } from '@/lib/api'
-import { baseProcedure } from '@/trpc/init'
+import { publicProcedure } from '@/trpc/init'
 import { z } from 'zod'
 
-export const listGroupExpensesProcedure = baseProcedure
+export const listGroupExpensesProcedure = publicProcedure
   .input(
     z.object({
       groupId: z.string().min(1).max(30), // nanoid is typically 21 chars

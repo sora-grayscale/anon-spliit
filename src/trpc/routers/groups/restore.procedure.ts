@@ -1,8 +1,8 @@
 import { restoreGroup } from '@/lib/api'
-import { baseProcedure } from '@/trpc/init'
+import { publicProcedure } from '@/trpc/init'
 import { z } from 'zod'
 
-export const restoreGroupProcedure = baseProcedure
+export const restoreGroupProcedure = publicProcedure
   .input(
     z.object({
       groupId: z.string().min(1),
