@@ -20,12 +20,41 @@ import {
 } from '@/lib/crypto'
 import { AlertCircle, Eye, EyeOff, KeyRound, Loader2 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 // Rate limiting for brute force protection
 const RATE_LIMIT_ATTEMPTS = 5
 const RATE_LIMIT_WINDOW_MS = 60000 // 1 minute
 const LOCKOUT_DURATION_MS = 300000 // 5 minutes
+
+// localStorage key for persisting rate limit state (Issue #51)
+const getStorageKey = (groupId: string) => `password-lockout:${groupId}`
+
+interface RateLimitState {
+  attempts: number[]
+  lockedUntil: number | null
+}
+
+// Safe localStorage access with try/catch (Issue #54)
+function loadRateLimitState(groupId: string): RateLimitState | null {
+  try {
+    const stored = localStorage.getItem(getStorageKey(groupId))
+    if (stored) {
+      return JSON.parse(stored) as RateLimitState
+    }
+  } catch {
+    // localStorage not available or parse error - ignore
+  }
+  return null
+}
+
+function saveRateLimitState(groupId: string, state: RateLimitState): void {
+  try {
+    localStorage.setItem(getStorageKey(groupId), JSON.stringify(state))
+  } catch {
+    // localStorage not available - ignore
+  }
+}
 
 interface PasswordPromptProps {
   groupId: string
@@ -51,6 +80,30 @@ export function PasswordPrompt({
   const [error, setError] = useState<string | null>(null)
   const [attempts, setAttempts] = useState<number[]>([])
   const [lockedUntil, setLockedUntil] = useState<number | null>(null)
+
+  // Load persisted rate limit state on mount (Issue #51)
+  useEffect(() => {
+    const stored = loadRateLimitState(groupId)
+    if (stored) {
+      const now = Date.now()
+      // Restore lockout if still active
+      if (stored.lockedUntil && stored.lockedUntil > now) {
+        setLockedUntil(stored.lockedUntil)
+      }
+      // Restore recent attempts (filter out expired ones)
+      const recentAttempts = stored.attempts.filter(
+        (time) => now - time < RATE_LIMIT_WINDOW_MS,
+      )
+      if (recentAttempts.length > 0) {
+        setAttempts(recentAttempts)
+      }
+    }
+  }, [groupId])
+
+  // Persist rate limit state when it changes (Issue #51)
+  useEffect(() => {
+    saveRateLimitState(groupId, { attempts, lockedUntil })
+  }, [groupId, attempts, lockedUntil])
 
   // Check rate limit
   const isRateLimited = () => {
