@@ -37,6 +37,8 @@ export function EditExpenseForm({
 
   // Decrypt expense when data and key are available
   useEffect(() => {
+    let isMounted = true // Track if component is still mounted (Issue #53)
+
     const shouldDecryptWithKey = hasKey && encryptionKey !== null
 
     // Skip if already processed with same state
@@ -50,14 +52,16 @@ export function EditExpenseForm({
 
     async function decrypt() {
       if (!expense) {
-        setDecryptedExpense(undefined)
+        if (isMounted) setDecryptedExpense(undefined)
         return
       }
 
       // If no encryption key, use original data
       if (!isKeyLoading && !hasKey) {
-        setDecryptedExpense(expense)
-        lastDecryptedRef.current = { id: expense.id, withKey: false }
+        if (isMounted) {
+          setDecryptedExpense(expense)
+          lastDecryptedRef.current = { id: expense.id, withKey: false }
+        }
         return
       }
 
@@ -67,16 +71,24 @@ export function EditExpenseForm({
 
       try {
         const decrypted = await decryptExpense(expense, encryptionKey)
-        setDecryptedExpense(decrypted)
-        lastDecryptedRef.current = { id: expense.id, withKey: true }
+        if (isMounted) {
+          setDecryptedExpense(decrypted)
+          lastDecryptedRef.current = { id: expense.id, withKey: true }
+        }
       } catch (error) {
         console.warn('Failed to decrypt expense:', error)
-        setDecryptedExpense(expense)
-        lastDecryptedRef.current = { id: expense.id, withKey: true }
+        if (isMounted) {
+          setDecryptedExpense(expense)
+          lastDecryptedRef.current = { id: expense.id, withKey: true }
+        }
       }
     }
 
     decrypt()
+
+    return () => {
+      isMounted = false
+    }
   }, [expense?.id, encryptionKey, isKeyLoading, hasKey, expense])
 
   const { mutateAsync: updateExpenseMutateAsync } =

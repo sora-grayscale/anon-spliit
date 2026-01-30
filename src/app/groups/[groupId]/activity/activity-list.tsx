@@ -115,6 +115,8 @@ export function ActivityList() {
   )
 
   useEffect(() => {
+    let isMounted = true // Track if component is still mounted (Issue #53)
+
     const activityIds = rawActivities?.map((a) => a.id).join(',') || ''
     const shouldDecryptWithKey = hasKey && encryptionKey !== null
     const stableKey = `${activityIds}`
@@ -129,14 +131,16 @@ export function ActivityList() {
 
     async function decrypt() {
       if (!rawActivities) {
-        setDecryptedActivities(undefined)
+        if (isMounted) setDecryptedActivities(undefined)
         return
       }
 
       // If no encryption key, use original data
       if (!isKeyLoading && !hasKey) {
-        setDecryptedActivities(rawActivities)
-        lastDecryptedRef.current = { key: stableKey, withKey: false }
+        if (isMounted) {
+          setDecryptedActivities(rawActivities)
+          lastDecryptedRef.current = { key: stableKey, withKey: false }
+        }
         return
       }
 
@@ -146,16 +150,24 @@ export function ActivityList() {
 
       try {
         const decrypted = await decryptActivities(rawActivities, encryptionKey)
-        setDecryptedActivities(decrypted)
-        lastDecryptedRef.current = { key: stableKey, withKey: true }
+        if (isMounted) {
+          setDecryptedActivities(decrypted)
+          lastDecryptedRef.current = { key: stableKey, withKey: true }
+        }
       } catch (error) {
         console.warn('Failed to decrypt activities:', error)
-        setDecryptedActivities(rawActivities)
-        lastDecryptedRef.current = { key: stableKey, withKey: true }
+        if (isMounted) {
+          setDecryptedActivities(rawActivities)
+          lastDecryptedRef.current = { key: stableKey, withKey: true }
+        }
       }
     }
 
     decrypt()
+
+    return () => {
+      isMounted = false
+    }
   }, [rawActivities, encryptionKey, isKeyLoading, hasKey])
 
   const activities = decryptedActivities

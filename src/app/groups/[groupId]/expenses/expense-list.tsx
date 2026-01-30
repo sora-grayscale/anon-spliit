@@ -161,6 +161,8 @@ const ExpenseListForSearch = ({
   )
 
   useEffect(() => {
+    let isMounted = true // Track if component is still mounted (Issue #53)
+
     const expenseIds = rawExpenses?.map((e) => e.id).join(',') || ''
     const shouldDecryptWithKey = hasKey && encryptionKey !== null
 
@@ -174,14 +176,16 @@ const ExpenseListForSearch = ({
 
     async function decrypt() {
       if (!rawExpenses) {
-        setDecryptedExpenses(undefined)
+        if (isMounted) setDecryptedExpenses(undefined)
         return
       }
 
       // If no encryption key, use original data
       if (!isKeyLoading && !hasKey) {
-        setDecryptedExpenses(rawExpenses)
-        lastDecryptedRef.current = { key: expenseIds, withKey: false }
+        if (isMounted) {
+          setDecryptedExpenses(rawExpenses)
+          lastDecryptedRef.current = { key: expenseIds, withKey: false }
+        }
         return
       }
 
@@ -191,16 +195,24 @@ const ExpenseListForSearch = ({
 
       try {
         const decrypted = await decryptExpenses(rawExpenses, encryptionKey)
-        setDecryptedExpenses(decrypted)
-        lastDecryptedRef.current = { key: expenseIds, withKey: true }
+        if (isMounted) {
+          setDecryptedExpenses(decrypted)
+          lastDecryptedRef.current = { key: expenseIds, withKey: true }
+        }
       } catch (error) {
         console.warn('Failed to decrypt expenses:', error)
-        setDecryptedExpenses(rawExpenses)
-        lastDecryptedRef.current = { key: expenseIds, withKey: true }
+        if (isMounted) {
+          setDecryptedExpenses(rawExpenses)
+          lastDecryptedRef.current = { key: expenseIds, withKey: true }
+        }
       }
     }
 
     decrypt()
+
+    return () => {
+      isMounted = false
+    }
   }, [rawExpenses, encryptionKey, isKeyLoading, hasKey])
 
   const displayExpenses = decryptedExpenses

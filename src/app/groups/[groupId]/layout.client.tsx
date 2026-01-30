@@ -56,11 +56,15 @@ function GroupLayoutInner({
 
   // Decrypt group data when both data and encryption key are available
   useEffect(() => {
+    let isMounted = true // Track if component is still mounted (Issue #53)
+
     async function decrypt() {
       if (!group) {
-        setDecryptedGroup(null)
-        lastDecryptedRef.current = null
-        setNeedsEncryptionKey(false)
+        if (isMounted) {
+          setDecryptedGroup(null)
+          lastDecryptedRef.current = null
+          setNeedsEncryptionKey(false)
+        }
         return
       }
 
@@ -81,14 +85,18 @@ function GroupLayoutInner({
       if (!isKeyLoading && !hasKey) {
         if (groupLooksEncrypted) {
           // Group is encrypted but we don't have the key
-          setNeedsEncryptionKey(true)
-          setDecryptedGroup(null)
+          if (isMounted) {
+            setNeedsEncryptionKey(true)
+            setDecryptedGroup(null)
+          }
           return
         }
         // Legacy/unencrypted group
-        setDecryptedGroup(group)
-        lastDecryptedRef.current = { id: group.id, withKey: false }
-        setNeedsEncryptionKey(false)
+        if (isMounted) {
+          setDecryptedGroup(group)
+          lastDecryptedRef.current = { id: group.id, withKey: false }
+          setNeedsEncryptionKey(false)
+        }
         return
       }
 
@@ -96,22 +104,34 @@ function GroupLayoutInner({
         return // Still loading key
       }
 
-      setIsDecrypting(true)
-      setNeedsEncryptionKey(false)
+      if (isMounted) {
+        setIsDecrypting(true)
+        setNeedsEncryptionKey(false)
+      }
       try {
         const decrypted = await decryptGroup(group, encryptionKey)
-        setDecryptedGroup(decrypted)
-        lastDecryptedRef.current = { id: group.id, withKey: true }
+        if (isMounted) {
+          setDecryptedGroup(decrypted)
+          lastDecryptedRef.current = { id: group.id, withKey: true }
+        }
       } catch (error) {
         console.warn('Failed to decrypt group, using original data:', error)
-        setDecryptedGroup(group)
-        lastDecryptedRef.current = { id: group.id, withKey: true }
+        if (isMounted) {
+          setDecryptedGroup(group)
+          lastDecryptedRef.current = { id: group.id, withKey: true }
+        }
       } finally {
-        setIsDecrypting(false)
+        if (isMounted) {
+          setIsDecrypting(false)
+        }
       }
     }
 
     decrypt()
+
+    return () => {
+      isMounted = false
+    }
   }, [group?.id, encryptionKey, isKeyLoading, hasKey, group])
 
   // Note: Query loading is handled by parent (GroupLayoutClient), so we only check key and decryption
