@@ -21,6 +21,10 @@ export function DecryptText({
   const [opacity, setOpacity] = useState(0)
 
   useEffect(() => {
+    // Track animation frame ID and cancellation state (Issue #52)
+    let animationFrameId: number | null = null
+    let cancelled = false
+
     // Start animation after delay
     const startTimeout = setTimeout(() => {
       // Fade in
@@ -29,6 +33,9 @@ export function DecryptText({
       const startTime = Date.now()
 
       const animate = () => {
+        // Stop if component was unmounted
+        if (cancelled) return
+
         const elapsed = Date.now() - startTime
         const progress = Math.min(elapsed / duration, 1)
 
@@ -40,16 +47,23 @@ export function DecryptText({
         setBlur(newBlur)
 
         if (progress < 1) {
-          requestAnimationFrame(animate)
+          animationFrameId = requestAnimationFrame(animate)
         } else {
           setBlur(0)
         }
       }
 
-      requestAnimationFrame(animate)
+      animationFrameId = requestAnimationFrame(animate)
     }, delay)
 
-    return () => clearTimeout(startTimeout)
+    // Cleanup: cancel timeout and animation frame (Issue #52)
+    return () => {
+      cancelled = true
+      clearTimeout(startTimeout)
+      if (animationFrameId !== null) {
+        cancelAnimationFrame(animationFrameId)
+      }
+    }
   }, [delay, duration])
 
   return (
