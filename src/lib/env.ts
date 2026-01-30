@@ -91,6 +91,13 @@ const envSchema = z
         .regex(/^[0-9a-fA-F]+$/, 'TWO_FA_ENCRYPTION_KEY must be a hex string')
         .optional(),
     ),
+    // TOTP Algorithm (Issue #49) - SHA1 for compatibility, SHA256 for better security
+    TOTP_ALGORITHM: z
+      .enum(['SHA1', 'SHA256'])
+      .default('SHA1')
+      .describe(
+        'TOTP hash algorithm (SHA1 for compatibility, SHA256 for security)',
+      ),
   })
   .superRefine((env, ctx) => {
     if (

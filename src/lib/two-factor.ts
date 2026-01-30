@@ -23,6 +23,11 @@ const BACKUP_CODE_COUNT = 10
 // App name for TOTP
 const APP_NAME = 'anon-spliit'
 
+// TOTP Algorithm - configurable via environment variable (Issue #49)
+// Default to SHA1 for compatibility with most authenticator apps
+// SHA256 provides better security but may not work with all apps
+const TOTP_ALGORITHM = env.TOTP_ALGORITHM || 'SHA1'
+
 // ============================================================
 // Key Management
 // ============================================================
@@ -234,7 +239,7 @@ export function generateTOTPSecret(userIdentifier: string = 'user'): {
   const totp = new OTPAuth.TOTP({
     issuer: APP_NAME,
     label: userIdentifier,
-    algorithm: 'SHA1',
+    algorithm: TOTP_ALGORITHM,
     digits: 6,
     period: 30,
   })
@@ -256,7 +261,7 @@ export function verifyTOTP(secret: string, token: string): boolean {
   try {
     const totp = new OTPAuth.TOTP({
       issuer: APP_NAME,
-      algorithm: 'SHA1',
+      algorithm: TOTP_ALGORITHM,
       digits: 6,
       period: 30,
       secret: OTPAuth.Secret.fromBase32(secret),
