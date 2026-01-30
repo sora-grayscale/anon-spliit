@@ -59,7 +59,7 @@ import { useLocale, useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { match } from 'ts-pattern'
 import { DeletePopup } from '../../../../components/delete-popup'
 import { extractCategoryFromTitle } from '../../../../components/expense-form-actions'
@@ -278,6 +278,31 @@ export function ExpenseForm({
             recurrenceRule: RecurrenceRule.NONE,
           },
   })
+
+  // Use useWatch for values needed in useEffect dependencies (Issue #44)
+  // This prevents infinite re-renders caused by form.watch() in dependency arrays
+  const watchedSplitMode = useWatch({
+    control: form.control,
+    name: 'splitMode',
+  })
+  const watchedAmount = useWatch({ control: form.control, name: 'amount' })
+  const watchedOriginalAmount = useWatch({
+    control: form.control,
+    name: 'originalAmount',
+  })
+  const watchedConversionRate = useWatch({
+    control: form.control,
+    name: 'conversionRate',
+  })
+  const watchedExpenseDate = useWatch({
+    control: form.control,
+    name: 'expenseDate',
+  })
+  const watchedOriginalCurrency = useWatch({
+    control: form.control,
+    name: 'originalCurrency',
+  })
+
   const [isCategoryLoading, setCategoryLoading] = useState(false)
   const activeUserId = useActiveUser(group.id)
 
@@ -315,8 +340,8 @@ export function ExpenseForm({
     'Custom',
   )
   const exchangeRate = useCurrencyRate(
-    form.watch('expenseDate'),
-    form.watch('originalCurrency') ?? '',
+    watchedExpenseDate,
+    watchedOriginalCurrency ?? '',
     groupCurrency.code,
   )
 
@@ -328,7 +353,7 @@ export function ExpenseForm({
 
   useEffect(() => {
     setManuallyEditedParticipants(new Set())
-  }, [form.watch('splitMode'), form.watch('amount')])
+  }, [watchedSplitMode, watchedAmount])
 
   useEffect(() => {
     const splitMode = form.getValues().splitMode
@@ -378,11 +403,7 @@ export function ExpenseForm({
       }
       form.setValue('paidFor', newPaidFor, { shouldValidate: true })
     }
-  }, [
-    manuallyEditedParticipants,
-    form.watch('amount'),
-    form.watch('splitMode'),
-  ])
+  }, [manuallyEditedParticipants, watchedAmount, watchedSplitMode])
 
   const [usingCustomConversionRate, setUsingCustomConversionRate] = useState(
     !!form.formState.defaultValues?.conversionRate,
@@ -417,8 +438,8 @@ export function ExpenseForm({
       }
     }
   }, [
-    form.watch('originalAmount'),
-    form.watch('conversionRate'),
+    watchedOriginalAmount,
+    watchedConversionRate,
     form.getFieldState('originalAmount').isTouched,
   ])
 
