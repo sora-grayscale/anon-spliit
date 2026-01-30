@@ -17,7 +17,8 @@ export const groupFormSchema = z
           name: z.string().min(2, 'min2').max(50, 'max50'),
         }),
       )
-      .min(1),
+      .min(1)
+      .max(500),
     // Password protection (Issue #2)
     password: z.string().optional(), // Used only during creation, not stored
     passwordHint: z.string().max(100, 'max100').optional(),
@@ -140,6 +141,7 @@ export const expenseFormSchema = z
         }),
       )
       .min(1, 'paidForMin1')
+      .max(500)
       .superRefine((paidFor, ctx) => {
         for (const { shares } of paidFor) {
           // Skip validation for encrypted strings (long and not parseable as numbers)
@@ -174,10 +176,11 @@ export const expenseFormSchema = z
         z.object({
           id: z.string(),
           url: z.string().url(),
-          width: z.number().int().min(1),
-          height: z.number().int().min(1),
+          width: z.number().int().min(1).max(10000),
+          height: z.number().int().min(1).max(10000),
         }),
       )
+      .max(100)
       .default([]),
     notes: z.string().optional(),
     recurrenceRule: z
