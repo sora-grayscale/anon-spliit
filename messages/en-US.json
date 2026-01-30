@@ -576,5 +576,15 @@
       "enabledTitle": "2FA Enabled",
       "enabledDescription": "Two-factor authentication has been successfully enabled for your account."
     }
+  },
+  "Error": {
+    "title": "Something went wrong",
+    "description": "An unexpected error occurred. Please try again.",
+    "retry": "Try again",
+    "goHome": "Go to home",
+    "groupTitle": "Error loading group",
+    "groupDescription": "There was a problem loading this group. The group may not exist or you may not have access.",
+    "encryptionError": "There was a problem with encryption. Make sure you have the correct link with the encryption key.",
+    "backToGroups": "Back to groups"
   }
 }
