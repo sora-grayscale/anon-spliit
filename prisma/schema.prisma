@@ -179,3 +179,16 @@ model WhitelistUser {
   addedById            String   // Admin who added this user
   createdAt            DateTime @default(now())
 }
+
+// Rate Limiting for distributed environments (Issue #41)
+// This table is optional - if it doesn't exist, in-memory rate limiting is used
+// Run migrations to enable database-backed rate limiting for multi-instance deployments
+model RateLimitAttempt {
+  id           String    @id // email or identifier being rate limited
+  count        Int       @default(0)
+  firstAttempt DateTime  @default(now())
+  lockedUntil  DateTime?
+  updatedAt    DateTime  @updatedAt
+
+  @@index([lockedUntil])  // For cleanup queries
+}
