@@ -55,13 +55,15 @@ export function clearDerivedKeyCache(): void {
 }
 
 /**
- * Generate a new random master key (128-bit)
+ * Generate a new random master key (256-bit for AES-256)
+ * Note: Legacy keys are 128-bit (16 bytes), new keys are 256-bit (32 bytes)
+ * The key length determines the AES variant used (Issue #50)
  */
 export function generateMasterKey(): Uint8Array {
   if (!isClient) {
     throw new Error('Crypto API not available')
   }
-  return crypto.getRandomValues(new Uint8Array(16))
+  return crypto.getRandomValues(new Uint8Array(32)) // 256-bit for AES-256
 }
 
 /**
@@ -140,6 +142,11 @@ export async function deriveKey(
     // Use proper salt for new data, zero salt for backward compatibility
     const salt = useZeroSalt ? new Uint8Array(16) : HKDF_SALT
 
+    // Determine AES key length based on master key size (Issue #50)
+    // - 16-byte master key (legacy) -> AES-128
+    // - 32-byte master key (new) -> AES-256
+    const aesKeyLength = masterKey.length >= 32 ? 256 : 128
+
     return crypto.subtle.deriveKey(
       {
         name: 'HKDF',
@@ -148,7 +155,7 @@ export async function deriveKey(
         info,
       },
       keyMaterial,
-      { name: 'AES-GCM', length: 128 },
+      { name: 'AES-GCM', length: aesKeyLength },
       false,
       ['encrypt', 'decrypt'],
     )
@@ -166,8 +173,10 @@ export async function deriveKey(
 }
 
 /**
- * Encrypt data using AES-128-GCM
+ * Encrypt data using AES-GCM (128 or 256 bit based on key size)
  * Returns base64-encoded ciphertext with IV prepended
+ * - 16-byte master key -> AES-128-GCM (legacy)
+ * - 32-byte master key -> AES-256-GCM (new, Issue #50)
  */
 export async function encrypt(
   data: string,
@@ -196,8 +205,10 @@ export async function encrypt(
 }
 
 /**
- * Decrypt data using AES-128-GCM
+ * Decrypt data using AES-GCM (128 or 256 bit based on key size)
  * Tries new salt first, falls back to zero salt for backward compatibility
+ * - 16-byte master key -> AES-128-GCM (legacy)
+ * - 32-byte master key -> AES-256-GCM (new, Issue #50)
  */
 export async function decrypt(
   encryptedData: string,
@@ -346,11 +357,13 @@ export function generateSalt(): Uint8Array {
  * Derive an encryption key from a password using PBKDF2
  * @param password - User password
  * @param salt - Random salt (should be stored with group)
- * @returns 128-bit key as Uint8Array
+ * @param keyLengthBytes - Key length in bytes (16 for AES-128, 32 for AES-256)
+ * @returns Derived key as Uint8Array
  */
 export async function deriveKeyFromPassword(
   password: string,
   salt: Uint8Array,
+  keyLengthBytes: number = 32, // Default to 256-bit for new groups (Issue #50)
 ): Promise<Uint8Array> {
   if (!isClient) {
     throw new Error('Crypto API not available')
@@ -366,7 +379,7 @@ export async function deriveKeyFromPassword(
     ['deriveBits'],
   )
 
-  // Derive 128 bits (16 bytes) using PBKDF2
+  // Derive key using PBKDF2
   const derivedBits = await crypto.subtle.deriveBits(
     {
       name: 'PBKDF2',
@@ -375,7 +388,7 @@ export async function deriveKeyFromPassword(
       hash: 'SHA-256',
     },
     keyMaterial,
-    128, // 128 bits = 16 bytes
+    keyLengthBytes * 8, // Convert bytes to bits
   )
 
   return new Uint8Array(derivedBits)
