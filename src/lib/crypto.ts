@@ -16,11 +16,19 @@ const isClient =
 
 /**
  * Cache for derived CryptoKeys to avoid repeated HKDF operations
- * Key format: `${base64MasterKey}:${purpose}`
+ * Key format: `${base64MasterKey}:${purpose}:${saltVersion}`
  * Stores Promise to handle concurrent requests efficiently
  * Bounded by MAX_CACHE_SIZE with simple FIFO (oldest-entry) eviction
  */
 const derivedKeyCache = new Map<string, Promise<CryptoKey>>()
+
+/**
+ * HKDF salt for key derivation (Issue #40)
+ * Using a constant non-zero salt provides better cryptographic hygiene
+ * than zero salt, even though zero salt is technically acceptable
+ * when the input key has high entropy (RFC 5869)
+ */
+const HKDF_SALT = new TextEncoder().encode('anon-spliit-hkdf')
 
 /**
  * Maximum cache size to prevent memory leaks in long-running sessions
@@ -28,10 +36,15 @@ const derivedKeyCache = new Map<string, Promise<CryptoKey>>()
 const MAX_CACHE_SIZE = 100
 
 /**
- * Generate cache key from master key and purpose
+ * Generate cache key from master key, purpose, and salt version
  */
-function getCacheKey(masterKey: Uint8Array, purpose: string): string {
-  return `${keyToBase64(masterKey)}:${purpose}`
+function getCacheKey(
+  masterKey: Uint8Array,
+  purpose: string,
+  useZeroSalt: boolean = false,
+): string {
+  const saltVersion = useZeroSalt ? 'v0' : 'v1'
+  return `${keyToBase64(masterKey)}:${purpose}:${saltVersion}`
 }
 
 /**
@@ -80,17 +93,22 @@ export function base64ToKey(base64: string): Uint8Array {
 /**
  * Derive an encryption key from the master key using HKDF
  * Uses caching to avoid repeated HKDF operations for the same key
+ *
+ * @param masterKey - The master encryption key
+ * @param purpose - Key purpose for domain separation ('data' or 'metadata')
+ * @param useZeroSalt - Use zero salt for backward compatibility with pre-v1 data
  */
 export async function deriveKey(
   masterKey: Uint8Array,
   purpose: 'data' | 'metadata' = 'data',
+  useZeroSalt: boolean = false,
 ): Promise<CryptoKey> {
   if (!isClient) {
     throw new Error('Crypto API not available')
   }
 
   // Check cache first
-  const cacheKey = getCacheKey(masterKey, purpose)
+  const cacheKey = getCacheKey(masterKey, purpose, useZeroSalt)
   const cached = derivedKeyCache.get(cacheKey)
   if (cached) {
     return cached
@@ -119,7 +137,8 @@ export async function deriveKey(
 
     // Derive the actual encryption key
     const info = new TextEncoder().encode(`spliit-e2ee-${purpose}`)
-    const salt = new Uint8Array(16) // Zero salt (key is already random)
+    // Use proper salt for new data, zero salt for backward compatibility
+    const salt = useZeroSalt ? new Uint8Array(16) : HKDF_SALT
 
     return crypto.subtle.deriveKey(
       {
@@ -178,6 +197,7 @@ export async function encrypt(
 
 /**
  * Decrypt data using AES-128-GCM
+ * Tries new salt first, falls back to zero salt for backward compatibility
  */
 export async function decrypt(
   encryptedData: string,
@@ -187,20 +207,31 @@ export async function decrypt(
     throw new Error('Crypto API not available')
   }
 
-  const key = await deriveKey(masterKey, 'data')
   const combined = base64ToKey(encryptedData)
 
   // Extract IV and ciphertext
   const iv = combined.slice(0, 12)
   const ciphertext = combined.slice(12)
 
-  const decrypted = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv },
-    key,
-    ciphertext,
-  )
-
-  return new TextDecoder().decode(decrypted)
+  // Try with new salt first (for data encrypted with v1)
+  try {
+    const key = await deriveKey(masterKey, 'data', false)
+    const decrypted = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv },
+      key,
+      ciphertext,
+    )
+    return new TextDecoder().decode(decrypted)
+  } catch {
+    // Fallback to zero salt for backward compatibility (pre-v1 data)
+    const legacyKey = await deriveKey(masterKey, 'data', true)
+    const decrypted = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv },
+      legacyKey,
+      ciphertext,
+    )
+    return new TextDecoder().decode(decrypted)
+  }
 }
 
 /**
