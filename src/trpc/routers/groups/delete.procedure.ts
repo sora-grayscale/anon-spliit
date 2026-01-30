@@ -1,8 +1,8 @@
 import { deleteGroup } from '@/lib/api'
-import { baseProcedure } from '@/trpc/init'
+import { publicProcedure } from '@/trpc/init'
 import { z } from 'zod'
 
-export const deleteGroupProcedure = baseProcedure
+export const deleteGroupProcedure = publicProcedure
   .input(
     z.object({
       groupId: z.string().min(1),
