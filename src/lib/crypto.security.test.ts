@@ -26,9 +26,9 @@ import {
 
 describe('Crypto Security Tests', () => {
   describe('Key Generation Security', () => {
-    it('should generate 128-bit (16 byte) keys', () => {
+    it('should generate 256-bit (32 byte) keys for AES-256 (Issue #50)', () => {
       const key = generateMasterKey()
-      expect(key.length).toBe(16)
+      expect(key.length).toBe(32)
     })
 
     it('should generate unique keys each time', () => {

@@ -96,8 +96,15 @@ export function PasswordPrompt({
       // Decode salt from base64
       const salt = base64ToKey(passwordSalt)
 
-      // Derive key from password
-      const passwordKey = await deriveKeyFromPassword(password, salt)
+      // Derive key from password (match URL key length for backward compatibility)
+      // - Existing groups with 16-byte URL keys use AES-128
+      // - New groups with 32-byte URL keys use AES-256 (Issue #50)
+      const keyLengthBytes = urlKey ? urlKey.length : 32
+      const passwordKey = await deriveKeyFromPassword(
+        password,
+        salt,
+        keyLengthBytes,
+      )
 
       // Combine with URL key if present, or use password key alone
       const finalKey = urlKey ? combineKeys(urlKey, passwordKey) : passwordKey
