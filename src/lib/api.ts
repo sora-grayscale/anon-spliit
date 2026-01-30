@@ -120,11 +120,16 @@ export async function deleteExpense(
   expenseId: string,
   participantId?: string,
 ) {
+  // Verify expense exists and belongs to the group before deleting (Issue #47)
   const existingExpense = await getExpense(groupId, expenseId)
+  if (!existingExpense) {
+    throw new Error('Expense not found or access denied')
+  }
+
   await logActivity(groupId, ActivityType.DELETE_EXPENSE, {
     participantId,
     expenseId,
-    data: existingExpense?.title,
+    data: existingExpense.title,
   })
 
   await prisma.expense.delete({
@@ -429,8 +434,12 @@ export async function getGroupExpenseCount(groupId: string) {
 }
 
 export async function getExpense(groupId: string, expenseId: string) {
-  return prisma.expense.findUnique({
-    where: { id: expenseId },
+  // Validate both expenseId AND groupId to prevent accessing expenses from other groups (Issue #47)
+  return prisma.expense.findFirst({
+    where: {
+      id: expenseId,
+      groupId: groupId,
+    },
     include: {
       paidBy: true,
       paidFor: true,
