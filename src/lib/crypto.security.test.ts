@@ -440,6 +440,73 @@ describe('Crypto Security Tests', () => {
     })
   })
 
+  describe('HKDF Salt Migration (Issue #40)', () => {
+    it('should decrypt data encrypted with new salt', async () => {
+      const key = generateMasterKey()
+      const plaintext = 'New encryption with proper salt'
+
+      const encrypted = await encrypt(plaintext, key)
+      const decrypted = await decrypt(encrypted, key)
+
+      expect(decrypted).toBe(plaintext)
+    })
+
+    it('should decrypt legacy data encrypted with zero salt', async () => {
+      // Simulate legacy encryption by using deriveKey with useZeroSalt=true
+      const key = generateMasterKey()
+      const plaintext = 'Legacy data from before salt fix'
+
+      // Encrypt using legacy zero salt method (simulating old data)
+      const legacyKey = await deriveKey(key, 'data', true)
+      const iv = crypto.getRandomValues(new Uint8Array(12))
+      const encoded = new TextEncoder().encode(plaintext)
+
+      const ciphertext = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        legacyKey,
+        encoded,
+      )
+
+      // Combine IV + ciphertext (legacy format)
+      const combined = new Uint8Array(iv.length + ciphertext.byteLength)
+      combined.set(iv)
+      combined.set(new Uint8Array(ciphertext), iv.length)
+      const legacyEncrypted = keyToBase64(combined)
+
+      // Decrypt should work with automatic fallback
+      const decrypted = await decrypt(legacyEncrypted, key)
+      expect(decrypted).toBe(plaintext)
+    })
+
+    it('should derive different keys with new salt vs zero salt', async () => {
+      const masterKey = generateMasterKey()
+
+      const newKey = await deriveKey(masterKey, 'data', false)
+      const legacyKey = await deriveKey(masterKey, 'data', true)
+
+      // Keys should be different CryptoKey objects
+      // We can verify by encrypting same data and getting different results
+      const testData = new TextEncoder().encode('test')
+      const iv = new Uint8Array(12) // Fixed IV for comparison
+
+      const newEncrypted = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        newKey,
+        testData,
+      )
+      const legacyEncrypted = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        legacyKey,
+        testData,
+      )
+
+      // Different keys should produce different ciphertext
+      expect(new Uint8Array(newEncrypted)).not.toEqual(
+        new Uint8Array(legacyEncrypted),
+      )
+    })
+  })
+
   describe('Attack Scenarios', () => {
     it('should resist replay attacks (unique ciphertext)', async () => {
       const key = generateMasterKey()
