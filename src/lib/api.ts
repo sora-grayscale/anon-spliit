@@ -370,6 +370,39 @@ export async function updateGroup(
   const existingGroup = await getGroup(groupId)
   if (!existingGroup) throw new Error('Invalid group ID')
 
+  // Issue #81: Check for participants being deleted
+  const participantsToDelete = existingGroup.participants
+    .filter((p) => !groupFormValues.participants.some((p2) => p2.id === p.id))
+    .map((p) => p.id)
+
+  if (participantsToDelete.length > 0) {
+    // Check if any expenses reference these participants as paidBy
+    // Due to cascade delete, removing these participants would delete their expenses
+    const expensesWithDeletedPayer = await prisma.expense.findMany({
+      where: {
+        groupId,
+        paidById: { in: participantsToDelete },
+      },
+      select: {
+        id: true,
+        title: true,
+        paidBy: { select: { name: true } },
+      },
+    })
+
+    if (expensesWithDeletedPayer.length > 0) {
+      const participantNames = expensesWithDeletedPayer
+        .map((e) => e.paidBy.name)
+        .filter((name, index, arr) => arr.indexOf(name) === index)
+        .join(', ')
+      throw new Error(
+        `Cannot delete participants with existing expenses. ` +
+          `The following participants have paid for expenses: ${participantNames}. ` +
+          `Please reassign or delete their expenses first.`,
+      )
+    }
+  }
+
   await logActivity(groupId, ActivityType.UPDATE_GROUP, { participantId })
 
   return prisma.group.update({
