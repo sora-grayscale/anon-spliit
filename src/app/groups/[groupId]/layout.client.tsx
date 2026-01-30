@@ -17,14 +17,21 @@ import { GroupHeader } from './group-header'
 import { SaveGroupLocally } from './save-recent-group'
 
 type Group = NonNullable<AppRouterOutput['groups']['get']['group']>
+type GroupQueryData = AppRouterOutput['groups']['get']
+
+interface GroupLayoutInnerProps {
+  groupId: string
+  groupData: GroupQueryData | undefined
+  children: React.ReactNode
+}
 
 function GroupLayoutInner({
   groupId,
+  groupData,
   children,
-}: PropsWithChildren<{ groupId: string }>) {
-  const { data, isLoading: isQueryLoading } = trpc.groups.get.useQuery({
-    groupId,
-  })
+}: GroupLayoutInnerProps) {
+  // Use data passed from parent to avoid duplicate tRPC query (Issue #45)
+  const data = groupData
   const t = useTranslations('Groups.NotFound')
   const { toast } = useToast()
   const { encryptionKey, isLoading: isKeyLoading, hasKey } = useEncryption()
@@ -107,7 +114,8 @@ function GroupLayoutInner({
     decrypt()
   }, [group?.id, encryptionKey, isKeyLoading, hasKey, group])
 
-  const isLoading = isQueryLoading || isKeyLoading || isDecrypting
+  // Note: Query loading is handled by parent (GroupLayoutClient), so we only check key and decryption
+  const isLoading = isKeyLoading || isDecrypting
 
   // Memoize props before any conditional returns (React hooks rule)
   const props = useMemo(
@@ -177,7 +185,9 @@ export function GroupLayoutClient({
       passwordHint={groupData?.group?.passwordHint}
       encryptedGroupName={groupData?.group?.name}
     >
-      <GroupLayoutInner groupId={groupId}>{children}</GroupLayoutInner>
+      <GroupLayoutInner groupId={groupId} groupData={groupData}>
+        {children}
+      </GroupLayoutInner>
     </EncryptionProvider>
   )
 }
