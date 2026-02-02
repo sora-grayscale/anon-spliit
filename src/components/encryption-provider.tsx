@@ -58,7 +58,8 @@ function loadKeyFromStorage(groupId: string): Uint8Array | null {
     const keyBase64 = localStorage.getItem(`${STORAGE_KEY_PREFIX}${groupId}`)
     if (keyBase64) {
       const key = base64ToKey(keyBase64)
-      if (key.length === 16) {
+      // Support both legacy 128-bit (16 bytes) and new 256-bit (32 bytes) keys (Issue #50)
+      if (key.length === 16 || key.length === 32) {
         return key
       }
     }
@@ -139,7 +140,8 @@ export function EncryptionProvider({
 
     try {
       const key = base64ToKey(hash)
-      if (key.length === 16) {
+      // Support both legacy 128-bit (16 bytes) and new 256-bit (32 bytes) keys (Issue #50)
+      if (key.length === 16 || key.length === 32) {
         return key
       }
     } catch {

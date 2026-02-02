@@ -145,7 +145,8 @@ export function useEncryptionKey() {
     if (hash) {
       try {
         const key = base64ToKey(hash)
-        if (key.length === 16) {
+        // Support both legacy 128-bit (16 bytes) and new 256-bit (32 bytes) keys (Issue #50)
+        if (key.length === 16 || key.length === 32) {
           setEncryptionKey(key)
           setError(null)
         } else {
@@ -163,7 +164,8 @@ export function useEncryptionKey() {
       if (newHash) {
         try {
           const key = base64ToKey(newHash)
-          if (key.length === 16) {
+          // Support both legacy 128-bit (16 bytes) and new 256-bit (32 bytes) keys (Issue #50)
+          if (key.length === 16 || key.length === 32) {
             setEncryptionKey(key)
             setError(null)
           }
