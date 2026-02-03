@@ -18,6 +18,10 @@ import {
   deriveKeyFromPassword,
   keyToBase64,
 } from '@/lib/crypto'
+import {
+  ENCRYPTION_KEY_PREFIX,
+  SESSION_PWD_KEY_PREFIX,
+} from '@/lib/storage'
 import { AlertCircle, Eye, EyeOff, KeyRound, Loader2 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useEffect, useState } from 'react'
@@ -179,14 +183,14 @@ export function PasswordPrompt({
       // Save to localStorage for this group
       const keyBase64 = keyToBase64(finalKey)
       try {
-        localStorage.setItem(`spliit-e2ee-key-${groupId}`, keyBase64)
+        localStorage.setItem(`${ENCRYPTION_KEY_PREFIX}${groupId}`, keyBase64)
       } catch {
         // localStorage not available - continue without saving
       }
 
       // Also save password-derived key separately for session
       sessionStorage.setItem(
-        `spliit-pwd-key-${groupId}`,
+        `${SESSION_PWD_KEY_PREFIX}${groupId}`,
         keyToBase64(passwordKey),
       )
 

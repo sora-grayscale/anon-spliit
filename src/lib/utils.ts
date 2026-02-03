@@ -7,6 +7,14 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+/**
+ * Convert a value that may be a string or number to a number.
+ * Used for handling encrypted amounts stored as strings.
+ */
+export function toNumber(value: number | string): number {
+  return typeof value === 'string' ? parseFloat(value) || 0 : value
+}
+
 export function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
@@ -67,8 +75,7 @@ export function formatCurrency(
   locale: string,
   fractions?: boolean,
 ) {
-  const numAmount =
-    typeof amount === 'string' ? parseFloat(amount) || 0 : amount
+  const numAmount = toNumber(amount)
   const format = new Intl.NumberFormat(locale, {
     minimumFractionDigits: currency.decimal_digits,
     maximumFractionDigits: currency.decimal_digits,
@@ -116,8 +123,7 @@ export function amountAsDecimal(
   currency: Currency,
   round = false,
 ) {
-  const numAmount =
-    typeof amount === 'string' ? parseFloat(amount) || 0 : amount
+  const numAmount = toNumber(amount)
   const decimal = numAmount / 10 ** currency.decimal_digits
   if (round) {
     return Number(decimal.toFixed(currency.decimal_digits))
@@ -137,8 +143,7 @@ export function amountAsMinorUnits(
   amount: number | string,
   currency: Currency,
 ) {
-  const numAmount =
-    typeof amount === 'string' ? parseFloat(amount) || 0 : amount
+  const numAmount = toNumber(amount)
   return Math.round(numAmount * 10 ** currency.decimal_digits)
 }
 
@@ -152,8 +157,7 @@ export function formatAmountAsDecimal(
   amount: number | string,
   currency: Currency,
 ) {
-  const numAmount =
-    typeof amount === 'string' ? parseFloat(amount) || 0 : amount
+  const numAmount = toNumber(amount)
   return amountAsDecimal(numAmount, currency).toFixed(currency.decimal_digits)
 }
 
