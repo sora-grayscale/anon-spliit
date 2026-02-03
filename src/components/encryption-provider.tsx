@@ -12,7 +12,12 @@ import {
   generateMasterKey,
   keyToBase64,
 } from '@/lib/crypto'
-import { ENCRYPTION_KEY_PREFIX, SESSION_PWD_KEY_PREFIX } from '@/lib/storage'
+import {
+  ENCRYPTION_KEY_PREFIX,
+  safeGetItem,
+  safeSetItem,
+  SESSION_PWD_KEY_PREFIX,
+} from '@/lib/storage'
 import {
   createContext,
   ReactNode,
@@ -37,12 +42,8 @@ function getGroupIdFromPath(): string | null {
  */
 function saveKeyToStorage(groupId: string, key: Uint8Array): void {
   if (typeof window === 'undefined') return
-  try {
-    const keyBase64 = keyToBase64(key)
-    localStorage.setItem(`${ENCRYPTION_KEY_PREFIX}${groupId}`, keyBase64)
-  } catch (error) {
-    console.warn('Failed to save encryption key to localStorage:', error)
-  }
+  const keyBase64 = keyToBase64(key)
+  safeSetItem(`${ENCRYPTION_KEY_PREFIX}${groupId}`, keyBase64)
 }
 
 /**
@@ -50,17 +51,17 @@ function saveKeyToStorage(groupId: string, key: Uint8Array): void {
  */
 function loadKeyFromStorage(groupId: string): Uint8Array | null {
   if (typeof window === 'undefined') return null
-  try {
-    const keyBase64 = localStorage.getItem(`${ENCRYPTION_KEY_PREFIX}${groupId}`)
-    if (keyBase64) {
+  const keyBase64 = safeGetItem(`${ENCRYPTION_KEY_PREFIX}${groupId}`)
+  if (keyBase64) {
+    try {
       const key = base64ToKey(keyBase64)
       // Support both legacy 128-bit (16 bytes) and new 256-bit (32 bytes) keys (Issue #50)
       if (key.length === 16 || key.length === 32) {
         return key
       }
+    } catch {
+      // Invalid key format - ignore
     }
-  } catch (error) {
-    console.warn('Failed to load encryption key from localStorage:', error)
   }
   return null
 }

@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/use-toast'
-import { ENCRYPTION_KEY_PREFIX } from '@/lib/storage'
+import { ENCRYPTION_KEY_PREFIX, safeGetItem } from '@/lib/storage'
 import { AppRouterOutput } from '@/trpc/routers/_app'
 import { StarFilledIcon } from '@radix-ui/react-icons'
 import { Calendar, MoreHorizontal, Star, Users } from 'lucide-react'
@@ -32,13 +32,9 @@ import { useMemo } from 'react'
 function getGroupUrl(groupId: string): string {
   if (typeof window === 'undefined') return `/groups/${groupId}/expenses`
 
-  try {
-    const keyBase64 = localStorage.getItem(`${ENCRYPTION_KEY_PREFIX}${groupId}`)
-    if (keyBase64) {
-      return `/groups/${groupId}/expenses#${keyBase64}`
-    }
-  } catch (error) {
-    console.warn('Failed to get encryption key from localStorage:', error)
+  const keyBase64 = safeGetItem(`${ENCRYPTION_KEY_PREFIX}${groupId}`)
+  if (keyBase64) {
+    return `/groups/${groupId}/expenses#${keyBase64}`
   }
   return `/groups/${groupId}/expenses`
 }

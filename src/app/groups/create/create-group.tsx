@@ -11,7 +11,11 @@ import {
 } from '@/lib/crypto'
 import { encryptGroupFormValues } from '@/lib/encrypt-helpers'
 import { GroupFormValues } from '@/lib/schemas'
-import { ENCRYPTION_KEY_PREFIX, SESSION_PWD_KEY_PREFIX } from '@/lib/storage'
+import {
+  ENCRYPTION_KEY_PREFIX,
+  safeSetItem,
+  SESSION_PWD_KEY_PREFIX,
+} from '@/lib/storage'
 import { trpc } from '@/trpc/client'
 import { useRouter } from 'next/navigation'
 
@@ -87,25 +91,20 @@ export const CreateGroup = () => {
 
         // Save keys to storage BEFORE redirect so EncryptionProvider can find them
         // This is done after group creation succeeds to avoid storing keys for failed creations
-        try {
-          // Save the combined key to localStorage (persistent)
-          localStorage.setItem(
-            `${ENCRYPTION_KEY_PREFIX}${groupId}`,
-            combinedKeyBase64,
-          )
+        // Save the combined key to localStorage (persistent)
+        safeSetItem(`${ENCRYPTION_KEY_PREFIX}${groupId}`, combinedKeyBase64)
 
-          // If password was used, also save password-derived key to sessionStorage
-          // This allows EncryptionProvider to verify the key combination
-          if (passwordKeyBase64) {
+        // If password was used, also save password-derived key to sessionStorage
+        // This allows EncryptionProvider to verify the key combination
+        if (passwordKeyBase64) {
+          try {
             sessionStorage.setItem(
               `${SESSION_PWD_KEY_PREFIX}${groupId}`,
               passwordKeyBase64,
             )
+          } catch {
+            // sessionStorage not available - continue without saving
           }
-        } catch (error) {
-          // Storage might be unavailable (private browsing, etc.)
-          // Continue anyway - user will need to re-enter password if needed
-          console.warn('Failed to save encryption keys to storage:', error)
         }
 
         // Redirect with URL key in fragment

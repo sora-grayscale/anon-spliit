@@ -18,7 +18,13 @@ import {
   deriveKeyFromPassword,
   keyToBase64,
 } from '@/lib/crypto'
-import { ENCRYPTION_KEY_PREFIX, SESSION_PWD_KEY_PREFIX } from '@/lib/storage'
+import {
+  ENCRYPTION_KEY_PREFIX,
+  safeGetJSON,
+  safeSetItem,
+  safeSetJSON,
+  SESSION_PWD_KEY_PREFIX,
+} from '@/lib/storage'
 import { AlertCircle, Eye, EyeOff, KeyRound, Loader2 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useEffect, useState } from 'react'
@@ -36,25 +42,13 @@ interface RateLimitState {
   lockedUntil: number | null
 }
 
-// Safe localStorage access with try/catch (Issue #54)
+// Safe localStorage access using storage.ts utilities (Issue #54, #95)
 function loadRateLimitState(groupId: string): RateLimitState | null {
-  try {
-    const stored = localStorage.getItem(getStorageKey(groupId))
-    if (stored) {
-      return JSON.parse(stored) as RateLimitState
-    }
-  } catch {
-    // localStorage not available or parse error - ignore
-  }
-  return null
+  return safeGetJSON<RateLimitState | null>(getStorageKey(groupId), null)
 }
 
 function saveRateLimitState(groupId: string, state: RateLimitState): void {
-  try {
-    localStorage.setItem(getStorageKey(groupId), JSON.stringify(state))
-  } catch {
-    // localStorage not available - ignore
-  }
+  safeSetJSON(getStorageKey(groupId), state)
 }
 
 interface PasswordPromptProps {
@@ -179,11 +173,7 @@ export function PasswordPrompt({
 
       // Save to localStorage for this group
       const keyBase64 = keyToBase64(finalKey)
-      try {
-        localStorage.setItem(`${ENCRYPTION_KEY_PREFIX}${groupId}`, keyBase64)
-      } catch {
-        // localStorage not available - continue without saving
-      }
+      safeSetItem(`${ENCRYPTION_KEY_PREFIX}${groupId}`, keyBase64)
 
       // Also save password-derived key separately for session
       sessionStorage.setItem(
