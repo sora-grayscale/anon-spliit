@@ -12,6 +12,7 @@ import {
   generateMasterKey,
   keyToBase64,
 } from '@/lib/crypto'
+import { ENCRYPTION_KEY_PREFIX, SESSION_PWD_KEY_PREFIX } from '@/lib/storage'
 import {
   createContext,
   ReactNode,
@@ -21,11 +22,6 @@ import {
   useMemo,
   useState,
 } from 'react'
-
-// localStorage key prefix for encryption keys
-const STORAGE_KEY_PREFIX = 'spliit-e2ee-key-'
-// sessionStorage key prefix for password-derived keys
-const SESSION_PWD_KEY_PREFIX = 'spliit-pwd-key-'
 
 /**
  * Extract groupId from current URL path
@@ -43,7 +39,7 @@ function saveKeyToStorage(groupId: string, key: Uint8Array): void {
   if (typeof window === 'undefined') return
   try {
     const keyBase64 = keyToBase64(key)
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}${groupId}`, keyBase64)
+    localStorage.setItem(`${ENCRYPTION_KEY_PREFIX}${groupId}`, keyBase64)
   } catch (error) {
     console.warn('Failed to save encryption key to localStorage:', error)
   }
@@ -55,7 +51,7 @@ function saveKeyToStorage(groupId: string, key: Uint8Array): void {
 function loadKeyFromStorage(groupId: string): Uint8Array | null {
   if (typeof window === 'undefined') return null
   try {
-    const keyBase64 = localStorage.getItem(`${STORAGE_KEY_PREFIX}${groupId}`)
+    const keyBase64 = localStorage.getItem(`${ENCRYPTION_KEY_PREFIX}${groupId}`)
     if (keyBase64) {
       const key = base64ToKey(keyBase64)
       // Support both legacy 128-bit (16 bytes) and new 256-bit (32 bytes) keys (Issue #50)

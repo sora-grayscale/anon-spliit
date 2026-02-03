@@ -10,6 +10,10 @@
  * to handle these edge cases gracefully.
  */
 
+// Storage key prefixes for encryption keys (Issue #94)
+export const ENCRYPTION_KEY_PREFIX = 'spliit-e2ee-key-'
+export const SESSION_PWD_KEY_PREFIX = 'spliit-pwd-key-'
+
 /**
  * Safely get an item from localStorage
  * @returns The stored value, or null if not found or on error
