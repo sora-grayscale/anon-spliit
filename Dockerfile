@@ -14,9 +14,9 @@ WORKDIR /usr/app
 COPY package.json pnpm-lock.yaml ./
 COPY prisma ./prisma
 
-# Install dependencies
+# Install dependencies (--ignore-scripts skips postinstall which requires DB)
 RUN apk add --no-cache openssl && \
-    pnpm install --frozen-lockfile && \
+    pnpm install --frozen-lockfile --ignore-scripts && \
     pnpm prisma generate
 
 # Copy source files
@@ -45,7 +45,7 @@ WORKDIR /usr/app
 COPY package.json pnpm-lock.yaml ./
 COPY prisma ./prisma
 
-RUN pnpm install --frozen-lockfile --prod && \
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts && \
     pnpm prisma generate
 
 # ===========================================
