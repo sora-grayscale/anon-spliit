@@ -132,9 +132,22 @@ export function createRateLimitMiddleware<TInput extends { groupId: string }>(
   maxAttempts: number,
   windowMs: number,
 ) {
-  return t.middleware(async ({ input, next }) => {
-    const typedInput = input as TInput
-    const key = `${operation}:${typedInput.groupId}`
+  return t.middleware(async ({ input, next, getRawInput }) => {
+    // Use input if available, otherwise get raw input (middleware may run before .input())
+    let inputData = input as TInput | undefined
+
+    if (!inputData?.groupId) {
+      // Try to get raw input if parsed input is not available
+      const rawInput = await getRawInput()
+      inputData = rawInput as TInput | undefined
+    }
+
+    // Skip rate limiting if no valid input (will fail at input validation anyway)
+    if (!inputData?.groupId) {
+      return next()
+    }
+
+    const key = `${operation}:${inputData.groupId}`
 
     // Check rate limit
     const { isLimited, retryAfter } = checkOperationRateLimit(
