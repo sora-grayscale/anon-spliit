@@ -1,0 +1,44 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Build outputs
+.next
+out
+build
+dist
+
+# Development files
+*.log
+*.local
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile
+compose.yaml
+container.env
+postgres-data
+
+# Test
+coverage
+*.test.ts
+*.test.tsx
+__tests__
+
+# Misc
+README.md
+LICENSE
+CLAUDE.md
+.jj
