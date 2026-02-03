@@ -171,9 +171,12 @@ export function PasswordPrompt({
         }
       }
 
-      // Save to localStorage for this group
-      const keyBase64 = keyToBase64(finalKey)
-      safeSetItem(`${ENCRYPTION_KEY_PREFIX}${groupId}`, keyBase64)
+      // Save urlKey to localStorage (NOT combinedKey - security fix)
+      // combinedKey must only exist in memory/sessionStorage
+      if (urlKey) {
+        const urlKeyBase64 = keyToBase64(urlKey)
+        safeSetItem(`${ENCRYPTION_KEY_PREFIX}${groupId}`, urlKeyBase64)
+      }
 
       // Also save password-derived key separately for session
       sessionStorage.setItem(
