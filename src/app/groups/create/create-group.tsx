@@ -11,12 +11,9 @@ import {
 } from '@/lib/crypto'
 import { encryptGroupFormValues } from '@/lib/encrypt-helpers'
 import { GroupFormValues } from '@/lib/schemas'
+import { ENCRYPTION_KEY_PREFIX, SESSION_PWD_KEY_PREFIX } from '@/lib/storage'
 import { trpc } from '@/trpc/client'
 import { useRouter } from 'next/navigation'
-
-// Storage key prefixes (must match encryption-provider.tsx)
-const STORAGE_KEY_PREFIX = 'spliit-e2ee-key-'
-const SESSION_PWD_KEY_PREFIX = 'spliit-pwd-key-'
 
 export const CreateGroup = () => {
   const { mutateAsync } = trpc.groups.create.useMutation()
@@ -93,7 +90,7 @@ export const CreateGroup = () => {
         try {
           // Save the combined key to localStorage (persistent)
           localStorage.setItem(
-            `${STORAGE_KEY_PREFIX}${groupId}`,
+            `${ENCRYPTION_KEY_PREFIX}${groupId}`,
             combinedKeyBase64,
           )
 
