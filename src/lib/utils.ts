@@ -67,8 +67,7 @@ export function formatCurrency(
   locale: string,
   fractions?: boolean,
 ) {
-  const numAmount =
-    typeof amount === 'string' ? parseFloat(amount) || 0 : amount
+  const numAmount = toNumber(amount)
   const format = new Intl.NumberFormat(locale, {
     minimumFractionDigits: currency.decimal_digits,
     maximumFractionDigits: currency.decimal_digits,
@@ -116,8 +115,7 @@ export function amountAsDecimal(
   currency: Currency,
   round = false,
 ) {
-  const numAmount =
-    typeof amount === 'string' ? parseFloat(amount) || 0 : amount
+  const numAmount = toNumber(amount)
   const decimal = numAmount / 10 ** currency.decimal_digits
   if (round) {
     return Number(decimal.toFixed(currency.decimal_digits))
@@ -137,8 +135,7 @@ export function amountAsMinorUnits(
   amount: number | string,
   currency: Currency,
 ) {
-  const numAmount =
-    typeof amount === 'string' ? parseFloat(amount) || 0 : amount
+  const numAmount = toNumber(amount)
   return Math.round(numAmount * 10 ** currency.decimal_digits)
 }
 
@@ -152,8 +149,7 @@ export function formatAmountAsDecimal(
   amount: number | string,
   currency: Currency,
 ) {
-  const numAmount =
-    typeof amount === 'string' ? parseFloat(amount) || 0 : amount
+  const numAmount = toNumber(amount)
   return amountAsDecimal(numAmount, currency).toFixed(currency.decimal_digits)
 }
 
@@ -178,4 +174,15 @@ export function normalizeString(input: string): string {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+}
+
+/**
+ * Converts a value to number, handling both string and number inputs.
+ * Returns 0 for invalid strings.
+ *
+ * @param value - The value to convert (string or number)
+ * @returns The numeric value, or 0 if parsing fails
+ */
+export function toNumber(value: number | string): number {
+  return typeof value === 'string' ? parseFloat(value) || 0 : value
 }

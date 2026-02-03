@@ -1,12 +1,5 @@
 import { getGroupExpenses } from '@/lib/api'
-
-/**
- * Helper to convert amount to number (handles string or number)
- */
-function toNumber(val: string | number): number {
-  if (typeof val === 'number') return val
-  return parseFloat(val) || 0
-}
+import { toNumber } from '@/lib/utils'
 
 /**
  * Generic expense type for totals calculation

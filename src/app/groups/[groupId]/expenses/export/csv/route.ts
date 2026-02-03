@@ -1,6 +1,10 @@
 import { getCategoryInfo } from '@/app/groups/[groupId]/expenses/category-icon'
 import { getCurrency } from '@/lib/currency'
-import { formatAmountAsDecimal, getCurrencyFromGroup } from '@/lib/utils'
+import {
+  formatAmountAsDecimal,
+  getCurrencyFromGroup,
+  toNumber,
+} from '@/lib/utils'
 import { Parser } from '@json2csv/plainjs'
 import { PrismaClient } from '@prisma/client'
 import contentDisposition from 'content-disposition'
@@ -102,13 +106,6 @@ export async function GET(
   ]
 
   const currency = getCurrencyFromGroup(group)
-
-  // Helper to convert string amounts to numbers (for encrypted groups, this will return 0)
-  const toNumber = (val: string | number): number => {
-    if (typeof val === 'number') return val
-    const num = parseFloat(val)
-    return isNaN(num) ? 0 : num
-  }
 
   const expenses = group.expenses.map((expense) => {
     const expenseAmount = toNumber(expense.amount)
