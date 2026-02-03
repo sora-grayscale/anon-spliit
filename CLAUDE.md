@@ -183,15 +183,16 @@ src/__tests__/private-instance.test.ts    # Private instance mode tests
 
 #### Issue #5: Docker/Podman Deployment
 
-**Status**: TODO
+**Status**: DONE
 **Priority**: LOW
 **Link**: https://github.com/sora-grayscale/anon-spliit/issues/5
 
-- Dockerfile for production build
-- docker-compose.yml with PostgreSQL
-- Environment variable configuration
-- Health checks and logging
-- Podman compatibility
+- [x] Dockerfile for production build (multi-stage, pnpm)
+- [x] compose.yaml with PostgreSQL
+- [x] Environment variable configuration (container.env.example)
+- [x] Health checks and logging
+- [x] Podman compatibility (build-image.sh supports both)
+- [x] container-entrypoint.sh for migrations at startup
 
 #### Issue #7: Rebrand to anon-spliit
 
@@ -387,9 +388,11 @@ jj new                        # Start new feature
 jj describe -m "feat: ..."    # Describe change
 jj git push --change @        # Push to remote
 
-# Docker (Issue #5)
-docker-compose up -d          # Start with Docker
-docker-compose logs -f        # View logs
+# Docker/Podman (Issue #5)
+cp container.env.example container.env  # Setup env
+docker compose up -d          # Start with Docker
+podman-compose up -d          # Or with Podman
+docker compose logs -f        # View logs
 ```
 
 ## File Structure
@@ -410,10 +413,13 @@ src/
 │   └── hooks/                # Custom hooks
 └── trpc/                     # tRPC routers
 
-# Docker files (Issue #5)
+# Docker/Podman files (Issue #5)
 Dockerfile
-docker-compose.yml
+compose.yaml
 .dockerignore
+container.env.example
+scripts/build-image.sh
+scripts/container-entrypoint.sh
 ```
 
 ## Contributing
