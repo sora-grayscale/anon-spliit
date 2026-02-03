@@ -1,4 +1,5 @@
 import { getGroupExpenses } from '@/lib/api'
+import { toNumber } from '@/lib/utils'
 import { Participant } from '@prisma/client'
 import { match } from 'ts-pattern'
 
@@ -11,14 +12,6 @@ export type Reimbursement = {
   from: Participant['id']
   to: Participant['id']
   amount: number
-}
-
-/**
- * Helper to convert amount to number (handles string or number)
- */
-function toNumber(val: string | number): number {
-  if (typeof val === 'number') return val
-  return parseFloat(val) || 0
 }
 
 /**
