@@ -1,6 +1,9 @@
-#!/bin/bash
+#!/bin/sh
 
-set -euxo pipefail
+set -eu
 
+echo "Running database migrations..."
 npx prisma migrate deploy
-exec npm run start
+
+echo "Starting application..."
+exec pnpm start

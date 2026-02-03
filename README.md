@@ -103,13 +103,34 @@ pnpm install
 pnpm dev
 ```
 
-### Run with Docker
+### Run with Docker/Podman
 
 ```bash
-pnpm run build-image
+# Copy and configure environment
 cp container.env.example container.env
-pnpm run start-container
+# Edit container.env with your settings (especially POSTGRES_PASSWORD)
+
+# Build and run with Docker
+docker compose up -d
+
+# Or with Podman
+podman-compose up -d
 ```
+
+**Alternative: Build image separately**
+
+```bash
+# Build the image
+./scripts/build-image.sh
+
+# Then start services
+docker compose up -d
+# or: podman-compose up -d
+```
+
+**Services:**
+- App: http://localhost:3000
+- Database: PostgreSQL (internal, port 5432)
 
 ## Private Instance Mode
 

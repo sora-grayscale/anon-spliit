@@ -1,12 +1,26 @@
-#!/bin/bash
+#!/bin/sh
 
-SPLIIT_APP_NAME=$(node -p -e "require('./package.json').name")
-SPLIIT_VERSION=$(node -p -e "require('./package.json').version")
+set -eu
 
-# we need to set dummy data for POSTGRES env vars in order for build not to fail
-docker buildx build \
-    -t ${SPLIIT_APP_NAME}:${SPLIIT_VERSION} \
-    -t ${SPLIIT_APP_NAME}:latest \
-    .
+APP_NAME=$(node -p -e "require('./package.json').name")
+APP_VERSION=$(node -p -e "require('./package.json').version")
 
-docker image prune -f
+echo "Building ${APP_NAME}:${APP_VERSION}..."
+
+# Build with Docker or Podman
+if command -v podman > /dev/null 2>&1; then
+    echo "Using Podman..."
+    podman build \
+        -t "${APP_NAME}:${APP_VERSION}" \
+        -t "${APP_NAME}:latest" \
+        .
+else
+    echo "Using Docker..."
+    docker buildx build \
+        -t "${APP_NAME}:${APP_VERSION}" \
+        -t "${APP_NAME}:latest" \
+        .
+    docker image prune -f
+fi
+
+echo "Build complete: ${APP_NAME}:${APP_VERSION}"
