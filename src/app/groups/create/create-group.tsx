@@ -59,7 +59,6 @@ export const CreateGroup = () => {
         }
 
         const keyBase64 = keyToBase64(urlKey)
-        const combinedKeyBase64 = keyToBase64(encryptionKey)
 
         // Prepare values for encryption (remove password field, add salt)
         const { password, passwordHint, ...valuesWithoutPassword } =
@@ -91,8 +90,9 @@ export const CreateGroup = () => {
 
         // Save keys to storage BEFORE redirect so EncryptionProvider can find them
         // This is done after group creation succeeds to avoid storing keys for failed creations
-        // Save the combined key to localStorage (persistent)
-        safeSetItem(`${ENCRYPTION_KEY_PREFIX}${groupId}`, combinedKeyBase64)
+        // Save urlKey to localStorage (NOT combinedKey - security fix)
+        // For password-protected groups, combinedKey must only exist in memory/sessionStorage
+        safeSetItem(`${ENCRYPTION_KEY_PREFIX}${groupId}`, keyBase64)
 
         // If password was used, also save password-derived key to sessionStorage
         // This allows EncryptionProvider to verify the key combination
