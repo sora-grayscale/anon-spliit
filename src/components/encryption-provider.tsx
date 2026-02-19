@@ -194,151 +194,165 @@ export function EncryptionProvider({
     if (typeof window === 'undefined') return
 
     const initializeKey = async () => {
-      const groupId = getGroupIdFromPath()
+      try {
+        const groupId = getGroupIdFromPath()
 
-      // For password-protected groups, check if we have a session password key
-      // If yes, we can try to use the stored combined key directly
-      const sessionPwdKey = passwordSalt ? getSessionPasswordKey() : null
+        // For password-protected groups, check if we have a session password key
+        // If yes, we can try to use the stored combined key directly
+        const sessionPwdKey = passwordSalt ? getSessionPasswordKey() : null
 
-      // First try to read URL key from hash
-      const hashUrlKey = readUrlKeyFromHash()
+        // First try to read URL key from hash
+        const hashUrlKey = readUrlKeyFromHash()
 
-      // Also check localStorage for saved key
-      const storedKey = restoreUrlKeyFromStorage()
+        // Also check localStorage for saved key
+        const storedKey = restoreUrlKeyFromStorage()
 
-      // CASE 1: Password-protected group with session password key
-      // localStorage now stores urlKey (not combinedKey), so recompute combinedKey
-      if (passwordSalt && sessionPwdKey && storedKey) {
-        const urlKeyToUse = hashUrlKey || storedKey
-        const combinedKey = combineKeys(urlKeyToUse, sessionPwdKey)
+        // CASE 1: Password-protected group with session password key
+        // localStorage now stores urlKey (not combinedKey), so recompute combinedKey
+        if (passwordSalt && sessionPwdKey && storedKey) {
+          const urlKeyToUse = hashUrlKey || storedKey
+          const combinedKey = combineKeys(urlKeyToUse, sessionPwdKey)
 
-        // Validate the computed key by test-decrypting the group name
-        // This detects old combinedKey format in localStorage and falls through to CASE 2
-        let keyValid = true
-        if (encryptedGroupName) {
-          try {
-            await decrypt(encryptedGroupName, combinedKey)
-          } catch {
-            keyValid = false
+          // Validate the computed key by test-decrypting the group name
+          // This detects old combinedKey format in localStorage and falls through to CASE 2
+          // If encryptedGroupName is unavailable, we cannot verify → require password (safe default)
+          let keyValid = false
+          if (encryptedGroupName) {
+            try {
+              await decrypt(encryptedGroupName, combinedKey)
+              keyValid = true
+            } catch {
+              // Decryption failed - wrong key combination
+            }
           }
+
+          if (keyValid) {
+            setEncryptionKey(combinedKey)
+            setUrlKey(urlKeyToUse)
+            setNeedsPassword(false)
+            setNeedsKey(false)
+
+            // Ensure localStorage has urlKey (migration from old combinedKey format)
+            if (groupId) {
+              saveKeyToStorage(groupId, urlKeyToUse)
+            }
+
+            setIsLoading(false)
+            return
+          }
+          // keyValid === false: old combinedKey format detected, fall through to CASE 2
         }
 
-        if (keyValid) {
-          setEncryptionKey(combinedKey)
-          setUrlKey(urlKeyToUse)
-          setNeedsPassword(false)
-          setNeedsKey(false)
+        // CASE 2: Password-protected group but no session password key
+        // Password is ALWAYS required when sessionPwdKey is missing (security fix)
+        // We need the URL key to derive the combined key after password entry
+        if (passwordSalt) {
+          // Determine urlKey: prefer hashUrlKey, validate storedKey before using
+          let urlKeyToUse: Uint8Array | null = hashUrlKey || null
 
-          // Ensure localStorage has urlKey (migration from old combinedKey format)
-          if (groupId) {
-            saveKeyToStorage(groupId, urlKeyToUse)
+          if (!urlKeyToUse && storedKey) {
+            // storedKey might be old combinedKey format - validate before using
+            // passwordHint is encrypted with urlKey, so successful decryption confirms storedKey is urlKey
+            let storedKeyValid = false
+
+            if (passwordHint) {
+              try {
+                await decrypt(passwordHint, storedKey)
+                storedKeyValid = true
+              } catch {
+                // Hint decryption failed → storedKey is not urlKey
+              }
+            }
+
+            if (storedKeyValid) {
+              urlKeyToUse = storedKey
+            } else {
+              // Cannot verify storedKey (no hint or hint decryption failed)
+              // Clear potentially invalid key to prevent permanent error loops
+              if (groupId) {
+                safeRemoveItem(`${ENCRYPTION_KEY_PREFIX}${groupId}`)
+              }
+            }
+          }
+
+          if (urlKeyToUse) {
+            setUrlKey(urlKeyToUse)
+            setNeedsPassword(true)
+            setNeedsKey(false)
+
+            // Ensure localStorage has urlKey for future access
+            if (groupId) {
+              saveKeyToStorage(groupId, urlKeyToUse)
+            }
+
+            // Decrypt password hint if available and not already decrypted
+            if (passwordHint && !decryptedHint) {
+              try {
+                const hint = await decrypt(passwordHint, urlKeyToUse)
+                setDecryptedHint(hint)
+              } catch {
+                // Failed to decrypt hint - ignore
+              }
+            }
+          } else {
+            // No valid URL key available, need key from URL
+            setNeedsKey(true)
           }
 
           setIsLoading(false)
           return
         }
-        // keyValid === false: old combinedKey format detected, fall through to CASE 2
-      }
 
-      // CASE 2: Password-protected group but no session password key
-      // Password is ALWAYS required when sessionPwdKey is missing (security fix)
-      // We need the URL key to derive the combined key after password entry
-      if (passwordSalt) {
-        // Determine urlKey: prefer hashUrlKey, validate storedKey before using
-        let urlKeyToUse: Uint8Array | null = hashUrlKey || null
+        // CASE 3: Non-password group
+        let currentKey = hashUrlKey
 
-        if (!urlKeyToUse && storedKey) {
-          // storedKey might be old combinedKey format - validate by hint decryption
-          if (passwordHint) {
-            try {
-              await decrypt(passwordHint, storedKey)
-              // Hint decrypted successfully → storedKey is real urlKey
-              urlKeyToUse = storedKey
-            } catch {
-              // Hint decryption failed → storedKey is likely old combinedKey
-              // Clear invalid stored key (old combinedKey format)
-              if (groupId) {
-                safeRemoveItem(`${ENCRYPTION_KEY_PREFIX}${groupId}`)
-              }
-            }
-          } else {
-            // No hint to validate against, use storedKey (best effort)
-            urlKeyToUse = storedKey
+        if (!currentKey) {
+          currentKey = storedKey
+
+          // If we have a key from storage, update the URL
+          if (currentKey) {
+            const keyBase64 = keyToBase64(currentKey)
+            const newUrl = `${window.location.pathname}${window.location.search}#${keyBase64}`
+            window.history.replaceState(null, '', newUrl)
+          }
+        } else {
+          // Save URL key to localStorage
+          if (groupId) {
+            saveKeyToStorage(groupId, currentKey)
           }
         }
 
-        if (urlKeyToUse) {
-          setUrlKey(urlKeyToUse)
-          setNeedsPassword(true)
-          setNeedsKey(false)
+        // If still no key and we should generate one
+        if (!currentKey && generateIfMissing) {
+          currentKey = generateMasterKey()
+          setError(null)
 
-          // Ensure localStorage has urlKey for future access
+          // Save to localStorage
           if (groupId) {
-            saveKeyToStorage(groupId, urlKeyToUse)
+            saveKeyToStorage(groupId, currentKey)
           }
 
-          // Decrypt password hint if available and not already decrypted
-          if (passwordHint && !decryptedHint) {
-            try {
-              const hint = await decrypt(passwordHint, urlKeyToUse)
-              setDecryptedHint(hint)
-            } catch {
-              // Failed to decrypt hint - ignore
-            }
-          }
+          // Update URL without navigation
+          const base64Key = keyToBase64(currentKey)
+          const newUrl = `${window.location.pathname}${window.location.search}#${base64Key}`
+          window.history.replaceState(null, '', newUrl)
+        }
+
+        if (currentKey) {
+          setEncryptionKey(currentKey)
+          setUrlKey(currentKey)
+          setNeedsKey(false)
         } else {
-          // No valid URL key available, need key from URL
           setNeedsKey(true)
         }
 
         setIsLoading(false)
-        return
-      }
-
-      // CASE 3: Non-password group
-      let currentKey = hashUrlKey
-
-      if (!currentKey) {
-        currentKey = storedKey
-
-        // If we have a key from storage, update the URL
-        if (currentKey) {
-          const keyBase64 = keyToBase64(currentKey)
-          const newUrl = `${window.location.pathname}${window.location.search}#${keyBase64}`
-          window.history.replaceState(null, '', newUrl)
-        }
-      } else {
-        // Save URL key to localStorage
-        if (groupId) {
-          saveKeyToStorage(groupId, currentKey)
-        }
-      }
-
-      // If still no key and we should generate one
-      if (!currentKey && generateIfMissing) {
-        currentKey = generateMasterKey()
-        setError(null)
-
-        // Save to localStorage
-        if (groupId) {
-          saveKeyToStorage(groupId, currentKey)
-        }
-
-        // Update URL without navigation
-        const base64Key = keyToBase64(currentKey)
-        const newUrl = `${window.location.pathname}${window.location.search}#${base64Key}`
-        window.history.replaceState(null, '', newUrl)
-      }
-
-      if (currentKey) {
-        setEncryptionKey(currentKey)
-        setUrlKey(currentKey)
-        setNeedsKey(false)
-      } else {
+      } catch {
+        // Catch unexpected errors (key length mismatch, crypto failures, etc.)
+        // to prevent UI from freezing in loading state
         setNeedsKey(true)
+        setIsLoading(false)
       }
-
-      setIsLoading(false)
     }
 
     initializeKey()
