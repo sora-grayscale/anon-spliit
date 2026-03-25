@@ -133,12 +133,15 @@ export async function decryptGroup<
 }
 
 /**
- * Check if a string looks like it might be encrypted
+ * Check if a string looks like it might be encrypted (Issue #112)
+ * Supports both v1 format (version byte + IV + ciphertext) and legacy format
+ * Minimum encrypted payload: IV(12 bytes) + GCM tag(16 bytes) + 1 byte = 29 bytes
+ * In base64: ceil(29 * 4/3) = 39 characters (legacy), 40+ characters (v1 with version byte)
  */
 export function looksEncrypted(value: string): boolean {
-  // Encrypted data will be at least 20 characters (12 bytes IV + some ciphertext in base64)
+  // Minimum length check: base64 of at least 29 bytes (legacy) ≈ 20 chars
   if (value.length < 20) return false
-  // Check if it's valid URL-safe base64
+  // Must be valid URL-safe base64
   return /^[A-Za-z0-9_-]+$/.test(value)
 }
 

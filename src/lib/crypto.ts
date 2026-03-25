@@ -172,9 +172,21 @@ export async function deriveKey(
   return derivationPromise
 }
 
+// ============================================================
+// Encryption Format Versioning (Issue #112)
+// ============================================================
+
+/**
+ * Current encryption format version
+ * v1: [version(1 byte)] + [IV(12 bytes)] + [ciphertext]
+ * Legacy (no version byte): [IV(12 bytes)] + [ciphertext]
+ */
+const ENCRYPTION_FORMAT_VERSION = 0x01
+
 /**
  * Encrypt data using AES-GCM (128 or 256 bit based on key size)
- * Returns base64-encoded ciphertext with IV prepended
+ * Returns base64-encoded ciphertext with version byte and IV prepended (Issue #112)
+ * Format: [version(1 byte)] + [IV(12 bytes)] + [ciphertext]
  * - 16-byte master key -> AES-128-GCM (legacy)
  * - 32-byte master key -> AES-256-GCM (new, Issue #50)
  */
@@ -196,19 +208,20 @@ export async function encrypt(
     encoded,
   )
 
-  // Combine IV + ciphertext
-  const combined = new Uint8Array(iv.length + ciphertext.byteLength)
-  combined.set(iv)
-  combined.set(new Uint8Array(ciphertext), iv.length)
+  // v1 format: version byte + IV + ciphertext (Issue #112)
+  const combined = new Uint8Array(1 + iv.length + ciphertext.byteLength)
+  combined[0] = ENCRYPTION_FORMAT_VERSION
+  combined.set(iv, 1)
+  combined.set(new Uint8Array(ciphertext), 1 + iv.length)
 
   return keyToBase64(combined)
 }
 
 /**
  * Decrypt data using AES-GCM (128 or 256 bit based on key size)
- * Tries new salt first, falls back to zero salt for backward compatibility
- * - 16-byte master key -> AES-128-GCM (legacy)
- * - 32-byte master key -> AES-256-GCM (new, Issue #50)
+ * Supports both v1 format (with version byte) and legacy format (Issue #112)
+ * - v1: [version(1 byte)] + [IV(12 bytes)] + [ciphertext] — uses new HKDF salt only
+ * - Legacy: [IV(12 bytes)] + [ciphertext] — tries new salt, falls back to zero salt
  */
 export async function decrypt(
   encryptedData: string,
@@ -220,11 +233,26 @@ export async function decrypt(
 
   const combined = base64ToKey(encryptedData)
 
-  // Extract IV and ciphertext
+  // Detect format version (Issue #112)
+  if (combined.length > 13 && combined[0] === ENCRYPTION_FORMAT_VERSION) {
+    // v1 format: skip version byte, extract IV and ciphertext
+    const iv = combined.slice(1, 13)
+    const ciphertext = combined.slice(13)
+
+    const key = await deriveKey(masterKey, 'data', false)
+    const decrypted = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv },
+      key,
+      ciphertext,
+    )
+    return new TextDecoder().decode(decrypted)
+  }
+
+  // Legacy format: [IV(12 bytes)] + [ciphertext]
   const iv = combined.slice(0, 12)
   const ciphertext = combined.slice(12)
 
-  // Try with new salt first (for data encrypted with v1)
+  // Try with new salt first (for data encrypted with HKDF salt)
   try {
     const key = await deriveKey(masterKey, 'data', false)
     const decrypted = await crypto.subtle.decrypt(
@@ -234,7 +262,7 @@ export async function decrypt(
     )
     return new TextDecoder().decode(decrypted)
   } catch {
-    // Fallback to zero salt for backward compatibility (pre-v1 data)
+    // Fallback to zero salt for backward compatibility (pre-HKDF data)
     const legacyKey = await deriveKey(masterKey, 'data', true)
     const decrypted = await crypto.subtle.decrypt(
       { name: 'AES-GCM', iv },
