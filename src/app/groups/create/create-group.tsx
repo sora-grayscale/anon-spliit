@@ -15,6 +15,7 @@ import {
   ENCRYPTION_KEY_PREFIX,
   safeSetItem,
   SESSION_PWD_KEY_PREFIX,
+  setSessionKey,
 } from '@/lib/storage'
 import { trpc } from '@/trpc/client'
 import { useRouter } from 'next/navigation'
@@ -94,17 +95,13 @@ export const CreateGroup = () => {
         // For password-protected groups, combinedKey must only exist in memory/sessionStorage
         safeSetItem(`${ENCRYPTION_KEY_PREFIX}${groupId}`, keyBase64)
 
-        // If password was used, also save password-derived key to sessionStorage
-        // This allows EncryptionProvider to verify the key combination
+        // If password was used, save password-derived key to in-memory cache (Issue #114)
+        // Using in-memory cache instead of sessionStorage to prevent XSS-based theft
         if (passwordKeyBase64) {
-          try {
-            sessionStorage.setItem(
-              `${SESSION_PWD_KEY_PREFIX}${groupId}`,
-              passwordKeyBase64,
-            )
-          } catch {
-            // sessionStorage not available - continue without saving
-          }
+          setSessionKey(
+            `${SESSION_PWD_KEY_PREFIX}${groupId}`,
+            passwordKeyBase64,
+          )
         }
 
         // Redirect with URL key in fragment

@@ -24,6 +24,7 @@ import {
   safeSetItem,
   safeSetJSON,
   SESSION_PWD_KEY_PREFIX,
+  setSessionKey,
 } from '@/lib/storage'
 import { AlertCircle, Eye, EyeOff, KeyRound, Loader2 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
@@ -178,8 +179,9 @@ export function PasswordPrompt({
         safeSetItem(`${ENCRYPTION_KEY_PREFIX}${groupId}`, urlKeyBase64)
       }
 
-      // Also save password-derived key separately for session
-      sessionStorage.setItem(
+      // Save password-derived key in memory-only cache (Issue #114)
+      // Using in-memory cache instead of sessionStorage to prevent XSS-based theft
+      setSessionKey(
         `${SESSION_PWD_KEY_PREFIX}${groupId}`,
         keyToBase64(passwordKey),
       )

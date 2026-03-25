@@ -15,6 +15,7 @@ import {
 } from '@/lib/crypto'
 import {
   ENCRYPTION_KEY_PREFIX,
+  getSessionKey,
   safeGetItem,
   safeRemoveItem,
   safeSetItem,
@@ -162,7 +163,7 @@ export function EncryptionProvider({
     return savedKey
   }, [])
 
-  // Function to get password-derived key from session storage
+  // Function to get password-derived key from in-memory cache (Issue #114)
   const getSessionPasswordKey = useCallback(() => {
     if (typeof window === 'undefined') return null
 
@@ -170,14 +171,14 @@ export function EncryptionProvider({
     if (!groupId) return null
 
     try {
-      const keyBase64 = sessionStorage.getItem(
+      const keyBase64 = getSessionKey(
         `${SESSION_PWD_KEY_PREFIX}${groupId}`,
       )
       if (keyBase64) {
         return base64ToKey(keyBase64)
       }
     } catch {
-      // Session storage not available or invalid key
+      // Invalid key format
     }
     return null
   }, [])
