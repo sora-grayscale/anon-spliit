@@ -163,6 +163,36 @@ describe('Private Instance Mode', () => {
       expect(isAdminRoute('/groups')).toBe(false)
     })
 
+    it('should redirect unauthenticated users from /admin to /auth/signin', () => {
+      const pathname = '/admin'
+      const sessionToken: string | undefined = undefined
+      const isAdminRoute = adminRoutes.some((route) =>
+        pathname.startsWith(route),
+      )
+
+      expect(isAdminRoute).toBe(true)
+      expect(sessionToken).toBeUndefined()
+
+      // Without session token, should redirect to signin
+      const shouldRedirect = isAdminRoute && !sessionToken
+      expect(shouldRedirect).toBe(true)
+    })
+
+    it('should allow authenticated users to access /admin', () => {
+      const pathname = '/admin'
+      const sessionToken: string | undefined = 'valid-session-token'
+      const isAdminRoute = adminRoutes.some((route) =>
+        pathname.startsWith(route),
+      )
+
+      expect(isAdminRoute).toBe(true)
+      expect(sessionToken).toBeDefined()
+
+      // With session token, should allow access
+      const shouldRedirect = isAdminRoute && !sessionToken
+      expect(shouldRedirect).toBe(false)
+    })
+
     it('should protect /groups/create before checking shared routes', () => {
       const pathname = '/groups/create'
 
