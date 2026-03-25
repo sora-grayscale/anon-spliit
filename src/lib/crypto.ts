@@ -234,18 +234,25 @@ export async function decrypt(
   const combined = base64ToKey(encryptedData)
 
   // Detect format version (Issue #112)
+  // Note: Legacy data where IV[0] happens to be 0x01 (1/256 chance) will
+  // be tried as v1 first, fail, then fall through to legacy format below
   if (combined.length > 13 && combined[0] === ENCRYPTION_FORMAT_VERSION) {
-    // v1 format: skip version byte, extract IV and ciphertext
-    const iv = combined.slice(1, 13)
-    const ciphertext = combined.slice(13)
+    try {
+      // v1 format: skip version byte, extract IV and ciphertext
+      const iv = combined.slice(1, 13)
+      const ciphertext = combined.slice(13)
 
-    const key = await deriveKey(masterKey, 'data', false)
-    const decrypted = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv },
-      key,
-      ciphertext,
-    )
-    return new TextDecoder().decode(decrypted)
+      const key = await deriveKey(masterKey, 'data', false)
+      const decrypted = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        ciphertext,
+      )
+      return new TextDecoder().decode(decrypted)
+    } catch {
+      // v1 decryption failed - may be legacy data where IV[0] == 0x01
+      // Fall through to legacy format handling below
+    }
   }
 
   // Legacy format: [IV(12 bytes)] + [ciphertext]

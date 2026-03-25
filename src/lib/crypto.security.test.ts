@@ -639,5 +639,32 @@ describe('Crypto Security Tests', () => {
 
       await expect(decrypt(encrypted, key2)).rejects.toThrow()
     })
+
+    it('should handle legacy data where IV[0] happens to be 0x01', async () => {
+      const key = generateMasterKey()
+
+      // Create legacy format with IV starting with 0x01 (mimics false v1 detection)
+      const derivedKey = await deriveKey(key, 'data', false)
+      const iv = new Uint8Array(12)
+      iv[0] = 0x01 // Force first byte to match ENCRYPTION_FORMAT_VERSION
+      crypto.getRandomValues(iv.subarray(1)) // Randomize the rest
+      const plaintext = 'legacy data with 0x01 IV'
+      const encoded = new TextEncoder().encode(plaintext)
+      const ciphertext = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        derivedKey,
+        encoded,
+      )
+
+      // Combine as legacy: IV + ciphertext (no version byte)
+      const combined = new Uint8Array(12 + ciphertext.byteLength)
+      combined.set(iv)
+      combined.set(new Uint8Array(ciphertext), 12)
+      const legacyEncrypted = keyToBase64(combined)
+
+      // decrypt() should try v1 first (fails), then fallback to legacy successfully
+      const decrypted = await decrypt(legacyEncrypted, key)
+      expect(decrypted).toBe(plaintext)
+    })
   })
 })
