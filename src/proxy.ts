@@ -85,10 +85,14 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Check admin routes
+  // Check admin routes - require session token
   if (adminRoutes.some((route) => pathname.startsWith(route))) {
-    // Admin check will be done in the page component
-    // Middleware can't easily check database
+    if (!sessionToken) {
+      const signInUrl = new URL('/auth/signin', request.url)
+      signInUrl.searchParams.set('callbackUrl', pathname)
+      return NextResponse.redirect(signInUrl)
+    }
+    // Detailed admin role check is done in the page component
     return NextResponse.next()
   }
 
