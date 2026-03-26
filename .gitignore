@@ -39,3 +39,6 @@ next-env.d.ts
 
 # db
 postgres-data
+
+# claude
+CLAUDE.md
