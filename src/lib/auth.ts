@@ -139,38 +139,52 @@ const authConfig: NextAuthConfig = {
       if (trigger === 'update' && token.sub) {
         const admin = await prisma.admin.findUnique({
           where: { id: token.sub },
-          select: { mustChangePassword: true, twoFactorEnabled: true },
+          select: {
+            mustChangePassword: true,
+            twoFactorEnabled: true,
+            lastTwoFactorVerifiedAt: true,
+          },
         })
         if (admin) {
           ;(token as Record<string, unknown>).mustChangePassword =
             admin.mustChangePassword
           ;(token as Record<string, unknown>).twoFactorEnabled =
             admin.twoFactorEnabled ?? false
-          // Clear requiresTwoFactor after 2FA verification (triggered by session update)
+          // Clear requiresTwoFactor only if server-side 2FA verification is recent (Issue #123)
+          // Never trust client-sent twoFactorVerified flag alone
           if (
             updateData &&
             typeof updateData === 'object' &&
             'twoFactorVerified' in updateData &&
-            updateData.twoFactorVerified === true
+            updateData.twoFactorVerified === true &&
+            admin.lastTwoFactorVerifiedAt &&
+            Date.now() - admin.lastTwoFactorVerifiedAt.getTime() < 5 * 60 * 1000
           ) {
             ;(token as Record<string, unknown>).requiresTwoFactor = false
           }
         } else {
           const whitelistUser = await prisma.whitelistUser.findUnique({
             where: { id: token.sub },
-            select: { mustChangePassword: true, twoFactorEnabled: true },
+            select: {
+              mustChangePassword: true,
+              twoFactorEnabled: true,
+              lastTwoFactorVerifiedAt: true,
+            },
           })
           if (whitelistUser) {
             ;(token as Record<string, unknown>).mustChangePassword =
               whitelistUser.mustChangePassword
             ;(token as Record<string, unknown>).twoFactorEnabled =
               whitelistUser.twoFactorEnabled ?? false
-            // Clear requiresTwoFactor after 2FA verification (triggered by session update)
+            // Clear requiresTwoFactor only if server-side 2FA verification is recent (Issue #123)
             if (
               updateData &&
               typeof updateData === 'object' &&
               'twoFactorVerified' in updateData &&
-              updateData.twoFactorVerified === true
+              updateData.twoFactorVerified === true &&
+              whitelistUser.lastTwoFactorVerifiedAt &&
+              Date.now() - whitelistUser.lastTwoFactorVerifiedAt.getTime() <
+                5 * 60 * 1000
             ) {
               ;(token as Record<string, unknown>).requiresTwoFactor = false
             }

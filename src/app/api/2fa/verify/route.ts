@@ -191,6 +191,21 @@ export async function POST(request: Request) {
     // Clear rate limit attempts on successful verification
     clearAttempts(rateLimitKey)
 
+    // Record server-side 2FA verification timestamp (Issue #123)
+    // This prevents client-side bypass of twoFactorVerified flag
+    const now = new Date()
+    if (isAdmin) {
+      await prisma.admin.update({
+        where: { id: user.id },
+        data: { lastTwoFactorVerifiedAt: now },
+      })
+    } else {
+      await prisma.whitelistUser.update({
+        where: { id: user.id },
+        data: { lastTwoFactorVerifiedAt: now },
+      })
+    }
+
     // 6. Return { success: true, verified: true } on success
     return NextResponse.json({
       success: true,
