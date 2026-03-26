@@ -171,9 +171,7 @@ export function EncryptionProvider({
     if (!groupId) return null
 
     try {
-      const keyBase64 = getSessionKey(
-        `${SESSION_PWD_KEY_PREFIX}${groupId}`,
-      )
+      const keyBase64 = getSessionKey(`${SESSION_PWD_KEY_PREFIX}${groupId}`)
       if (keyBase64) {
         return base64ToKey(keyBase64)
       }
