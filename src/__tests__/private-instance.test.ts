@@ -83,10 +83,8 @@ describe('Private Instance Mode', () => {
 
     it('should search admin and whitelist in parallel pattern', async () => {
       // Simulates Promise.all parallel search pattern
-      const searchAdmin = () =>
-        Promise.resolve(null) // not found
-      const searchWhitelist = () =>
-        Promise.resolve(null) // not found
+      const searchAdmin = () => Promise.resolve(null) // not found
+      const searchWhitelist = () => Promise.resolve(null) // not found
 
       const [admin, whitelistUser] = await Promise.all([
         searchAdmin(),
