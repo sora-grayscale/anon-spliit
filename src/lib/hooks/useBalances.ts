@@ -81,7 +81,7 @@ export function useBalances(groupId: string) {
         // Issue #80: Don't fall back to encrypted data - it causes wrong balance calculations
         console.error(
           'Failed to decrypt expenses for balance calculation:',
-          error,
+          error instanceof Error ? error.message : 'Unknown error',
         )
         if (isMounted) {
           setDecryptedExpenses([]) // Use empty array, not encrypted data

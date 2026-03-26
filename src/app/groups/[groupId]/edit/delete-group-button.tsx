@@ -55,7 +55,10 @@ export function DeleteGroupButton() {
       await utils.groups.invalidate()
       router.push('/groups')
     } catch (error) {
-      console.error('Failed to delete group:', error)
+      console.error(
+        'Failed to delete group:',
+        error instanceof Error ? error.message : 'Unknown error',
+      )
       setIsDeleting(false)
     }
   }

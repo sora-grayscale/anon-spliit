@@ -78,7 +78,10 @@ export function GroupDeletedScreen({
       // Force a full page reload to show restored group
       window.location.reload()
     } catch (error) {
-      console.error('Failed to restore group:', error)
+      console.error(
+        'Failed to restore group:',
+        error instanceof Error ? error.message : 'Unknown error',
+      )
       setIsRestoring(false)
     }
   }
@@ -93,7 +96,10 @@ export function GroupDeletedScreen({
       removeSessionKey(`${SESSION_PWD_KEY_PREFIX}${groupId}`)
       router.push('/groups')
     } catch (error) {
-      console.error('Failed to permanently delete group:', error)
+      console.error(
+        'Failed to permanently delete group:',
+        error instanceof Error ? error.message : 'Unknown error',
+      )
       setIsPermanentlyDeleting(false)
     }
   }
