@@ -557,4 +557,114 @@ describe('Crypto Security Tests', () => {
       }
     })
   })
+
+  describe('Encryption Format Versioning (Issue #112)', () => {
+    it('should encrypt with v1 format (version byte prepended)', async () => {
+      const key = generateMasterKey()
+      const plaintext = 'test data for v1 format'
+      const encrypted = await encrypt(plaintext, key)
+
+      // Decode and verify v1 format: first byte should be 0x01
+      const bytes = base64ToKey(encrypted)
+      expect(bytes[0]).toBe(0x01)
+      // Total should be: 1 (version) + 12 (IV) + ciphertext (>= 16 for GCM tag)
+      expect(bytes.length).toBeGreaterThanOrEqual(29)
+    })
+
+    it('should decrypt v1 format correctly', async () => {
+      const key = generateMasterKey()
+      const plaintext = 'roundtrip test for v1'
+      const encrypted = await encrypt(plaintext, key)
+      const decrypted = await decrypt(encrypted, key)
+
+      expect(decrypted).toBe(plaintext)
+    })
+
+    it('should decrypt legacy format (no version byte) correctly', async () => {
+      const key = generateMasterKey()
+
+      // Manually create legacy format: [IV(12)] + [ciphertext]
+      const derivedKey = await deriveKey(key, 'data', false)
+      const iv = crypto.getRandomValues(new Uint8Array(12))
+      const plaintext = 'legacy format test'
+      const encoded = new TextEncoder().encode(plaintext)
+      const ciphertext = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        derivedKey,
+        encoded,
+      )
+
+      // Combine as legacy: IV + ciphertext (no version byte)
+      const combined = new Uint8Array(12 + ciphertext.byteLength)
+      combined.set(iv)
+      combined.set(new Uint8Array(ciphertext), 12)
+      const legacyEncrypted = keyToBase64(combined)
+
+      // decrypt() should handle legacy format via fallback
+      const decrypted = await decrypt(legacyEncrypted, key)
+      expect(decrypted).toBe(plaintext)
+    })
+
+    it('should handle v1 encrypt -> decrypt for numbers', async () => {
+      const key = generateMasterKey()
+      const num = 12345
+      const encrypted = await encryptNumber(num, key)
+      const decrypted = await decryptNumber(encrypted, key)
+
+      expect(decrypted).toBe(num)
+    })
+
+    it('should handle v1 encrypt -> decrypt for objects', async () => {
+      const key = generateMasterKey()
+      const obj = { amount: 100, currency: 'USD' }
+      const encrypted = await encryptObject(obj, key)
+      const decrypted = await decryptObject(encrypted, key)
+
+      expect(decrypted).toEqual(obj)
+    })
+
+    it('should handle unicode text in v1 format', async () => {
+      const key = generateMasterKey()
+      const plaintext = '日本語テスト 🔐 Ñoño'
+      const encrypted = await encrypt(plaintext, key)
+      const decrypted = await decrypt(encrypted, key)
+
+      expect(decrypted).toBe(plaintext)
+    })
+
+    it('should fail decryption with wrong key for v1 format', async () => {
+      const key1 = generateMasterKey()
+      const key2 = generateMasterKey()
+      const encrypted = await encrypt('secret', key1)
+
+      await expect(decrypt(encrypted, key2)).rejects.toThrow()
+    })
+
+    it('should handle legacy data where IV[0] happens to be 0x01', async () => {
+      const key = generateMasterKey()
+
+      // Create legacy format with IV starting with 0x01 (mimics false v1 detection)
+      const derivedKey = await deriveKey(key, 'data', false)
+      const iv = new Uint8Array(12)
+      iv[0] = 0x01 // Force first byte to match ENCRYPTION_FORMAT_VERSION
+      crypto.getRandomValues(iv.subarray(1)) // Randomize the rest
+      const plaintext = 'legacy data with 0x01 IV'
+      const encoded = new TextEncoder().encode(plaintext)
+      const ciphertext = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        derivedKey,
+        encoded,
+      )
+
+      // Combine as legacy: IV + ciphertext (no version byte)
+      const combined = new Uint8Array(12 + ciphertext.byteLength)
+      combined.set(iv)
+      combined.set(new Uint8Array(ciphertext), 12)
+      const legacyEncrypted = keyToBase64(combined)
+
+      // decrypt() should try v1 first (fails), then fallback to legacy successfully
+      const decrypted = await decrypt(legacyEncrypted, key)
+      expect(decrypted).toBe(plaintext)
+    })
+  })
 })
