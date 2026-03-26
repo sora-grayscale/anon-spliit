@@ -92,7 +92,10 @@ export async function proxy(request: NextRequest) {
       signInUrl.searchParams.set('callbackUrl', pathname)
       return NextResponse.redirect(signInUrl)
     }
-    // Detailed admin role check is done in the page component
+    // Admin role (isAdmin) is verified in:
+    // - Page component: src/app/admin/page.tsx (auth() + isAdmin check)
+    // - API layer: src/app/api/admin/*/route.ts (session.user.isAdmin check)
+    // JWT decoding in proxy is avoided to prevent NextAuth internal dependency
     return NextResponse.next()
   }
 
