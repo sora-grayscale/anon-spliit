@@ -20,6 +20,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import {
+  ENCRYPTION_KEY_PREFIX,
+  removeSessionKey,
+  safeRemoveItem,
+  SESSION_PWD_KEY_PREFIX,
+} from '@/lib/storage'
 import { trpc } from '@/trpc/client'
 import { Loader2, RotateCcw, Trash2 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
@@ -82,6 +88,9 @@ export function GroupDeletedScreen({
     try {
       await permanentDelete({ groupId })
       deleteRecentGroup({ id: groupId, name: groupName })
+      // Clean up encryption keys from storage (Issue #108)
+      safeRemoveItem(`${ENCRYPTION_KEY_PREFIX}${groupId}`)
+      removeSessionKey(`${SESSION_PWD_KEY_PREFIX}${groupId}`)
       router.push('/groups')
     } catch (error) {
       console.error('Failed to permanently delete group:', error)
