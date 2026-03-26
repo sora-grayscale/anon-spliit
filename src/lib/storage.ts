@@ -14,6 +14,32 @@
 export const ENCRYPTION_KEY_PREFIX = 'spliit-e2ee-key-'
 export const SESSION_PWD_KEY_PREFIX = 'spliit-pwd-key-'
 
+// In-memory cache for sensitive session keys (Issue #114)
+// Replaces sessionStorage to prevent XSS-based key theft
+const sessionKeyCache = new Map<string, string>()
+
+/**
+ * Set a sensitive key in memory-only cache
+ * Unlike sessionStorage, this is not accessible via DOM APIs
+ */
+export function setSessionKey(key: string, value: string): void {
+  sessionKeyCache.set(key, value)
+}
+
+/**
+ * Get a sensitive key from memory-only cache
+ */
+export function getSessionKey(key: string): string | null {
+  return sessionKeyCache.get(key) ?? null
+}
+
+/**
+ * Remove a sensitive key from memory-only cache
+ */
+export function removeSessionKey(key: string): void {
+  sessionKeyCache.delete(key)
+}
+
 /**
  * Safely get an item from localStorage
  * @returns The stored value, or null if not found or on error
