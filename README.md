@@ -35,7 +35,7 @@
 
 | Feature                   | Description                                              |
 | ------------------------- | -------------------------------------------------------- |
-| **E2E Encryption**        | AES-128-GCM encryption with keys stored in URL fragments |
+| **E2E Encryption**        | AES-256-GCM encryption with keys stored in URL fragments |
 | **Zero-Knowledge Server** | Server only stores encrypted data                        |
 | **Password Protection**   | Optional PBKDF2-based password for additional security   |
 | **Two-Factor Authentication (2FA)** | TOTP-based with backup codes for recovery |
@@ -114,7 +114,7 @@ cp container.env.example container.env
 docker compose up -d
 
 # Or with Podman
-podman-compose up -d
+podman compose up -d
 ```
 
 **Alternative: Build image separately**
@@ -125,7 +125,7 @@ podman-compose up -d
 
 # Then start services
 docker compose up -d
-# or: podman-compose up -d
+# or: podman compose up -d
 ```
 
 **Services:**
@@ -174,7 +174,8 @@ TWO_FA_ENCRYPTION_KEY=<256-bit hex key>  # Optional - encryption key for 2FA sec
 ### Database
 
 ```bash
-DATABASE_URL=postgresql://user:password@localhost:5432/spliit
+POSTGRES_PRISMA_URL=postgresql://user:password@localhost:5432/spliit
+POSTGRES_URL_NON_POOLING=postgresql://user:password@localhost:5432/spliit
 ```
 
 ### NextAuth.js (Private Instance Mode)
@@ -191,17 +192,17 @@ NEXTAUTH_URL=https://your-domain.com
 | Frontend   | Next.js 16, React, TypeScript, TailwindCSS |
 | Backend    | tRPC, Prisma ORM                           |
 | Database   | PostgreSQL                                 |
-| Encryption | Web Crypto API (AES-128-GCM, HKDF, PBKDF2) |
+| Encryption | Web Crypto API (AES-256-GCM, HKDF, PBKDF2) |
 | UI         | shadcn/ui                                  |
 
 ## Security
 
 ### How Encryption Works
 
-1. **Key Generation**: A random 128-bit key is generated when creating a group
+1. **Key Generation**: A random 256-bit key is generated when creating a group
 2. **Key Storage**: The key is stored in the URL fragment (`#key`) - this part is never sent to the server
-3. **Encryption**: All sensitive data is encrypted client-side using AES-128-GCM
-4. **Password Protection**: Optionally add a password using PBKDF2 (100,000 iterations)
+3. **Encryption**: All sensitive data is encrypted client-side using AES-256-GCM with versioned format
+4. **Password Protection**: Optionally add a password using PBKDF2 (100,000 iterations, SHA-256)
 
 ### Best Practices
 
@@ -216,10 +217,10 @@ Contributions are welcome! Please feel free to submit issues and pull requests.
 
 ```bash
 # Fork and clone
-git clone https://github.com/YOUR_USERNAME/spliit.git
+git clone https://github.com/YOUR_USERNAME/anon-spliit.git
 
 # Create a branch
-git checkout -b feature/your-feature
+git switch -c feature/your-feature
 
 # Make changes and test
 pnpm test
