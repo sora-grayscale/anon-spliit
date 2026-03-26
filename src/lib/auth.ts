@@ -13,6 +13,10 @@ import bcrypt from 'bcryptjs'
 import NextAuth, { type NextAuthConfig } from 'next-auth'
 import Credentials from 'next-auth/providers/credentials'
 
+// Dummy hash for timing-safe comparison when user doesn't exist (Issue #111)
+// This ensures consistent response time regardless of user existence
+const DUMMY_HASH = bcrypt.hashSync('dummy-password-for-timing-equalization', 12)
+
 // Extend the session type to include our custom properties
 declare module 'next-auth' {
   interface Session {
@@ -61,10 +65,12 @@ const authConfig: NextAuthConfig = {
           return null
         }
 
-        // Check if user is an admin
-        const admin = await prisma.admin.findUnique({
-          where: { email },
-        })
+        // Search admin and whitelist tables in parallel to prevent
+        // user enumeration via timing differences (Issue #111)
+        const [admin, whitelistUser] = await Promise.all([
+          prisma.admin.findUnique({ where: { email } }),
+          prisma.whitelistUser.findUnique({ where: { email } }),
+        ])
 
         if (admin) {
           const isValidPassword = await bcrypt.compare(password, admin.password)
@@ -83,14 +89,7 @@ const authConfig: NextAuthConfig = {
               requiresTwoFactor: twoFactorEnabled,
             }
           }
-        }
-
-        // Check if user is in whitelist
-        const whitelistUser = await prisma.whitelistUser.findUnique({
-          where: { email },
-        })
-
-        if (whitelistUser && whitelistUser.password) {
+        } else if (whitelistUser && whitelistUser.password) {
           const isValidPassword = await bcrypt.compare(
             password,
             whitelistUser.password,
@@ -110,6 +109,9 @@ const authConfig: NextAuthConfig = {
               requiresTwoFactor: twoFactorEnabled,
             }
           }
+        } else {
+          // No user found - perform dummy bcrypt comparison to equalize timing
+          await bcrypt.compare(password, DUMMY_HASH)
         }
 
         // Record failed attempt for rate limiting

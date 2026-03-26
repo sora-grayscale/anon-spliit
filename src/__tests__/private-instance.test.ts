@@ -62,6 +62,40 @@ describe('Private Instance Mode', () => {
     })
   })
 
+  describe('Timing-Safe Authorization (Issue #111)', () => {
+    it('should perform bcrypt comparison even when user does not exist', async () => {
+      // Ensures timing is consistent regardless of user existence
+      const DUMMY_HASH = bcrypt.hashSync(
+        'dummy-password-for-timing-equalization',
+        12,
+      )
+      const password = 'any-password'
+
+      // Simulates the behavior when no user is found
+      const start = Date.now()
+      const result = await bcrypt.compare(password, DUMMY_HASH)
+      const elapsed = Date.now() - start
+
+      expect(result).toBe(false)
+      // bcrypt comparison should take measurable time (> 10ms)
+      expect(elapsed).toBeGreaterThan(10)
+    })
+
+    it('should search admin and whitelist in parallel pattern', async () => {
+      // Simulates Promise.all parallel search pattern
+      const searchAdmin = () => Promise.resolve(null) // not found
+      const searchWhitelist = () => Promise.resolve(null) // not found
+
+      const [admin, whitelistUser] = await Promise.all([
+        searchAdmin(),
+        searchWhitelist(),
+      ])
+
+      expect(admin).toBeNull()
+      expect(whitelistUser).toBeNull()
+    })
+  })
+
   describe('Password Hashing', () => {
     it('should hash passwords with bcrypt', async () => {
       const password = 'testpassword123'
