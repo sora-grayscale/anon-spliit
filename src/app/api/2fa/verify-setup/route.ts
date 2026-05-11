@@ -5,6 +5,7 @@
  */
 
 import { auth } from '@/lib/auth'
+import { passwordChangeRequiredResponse } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import {
   checkRateLimit,
@@ -24,6 +25,9 @@ export async function POST(request: Request) {
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    const pwChangeResp = passwordChangeRequiredResponse(session)
+    if (pwChangeResp) return pwChangeResp
 
     // 2. Accept { token } in request body
     const body = (await request.json()) as {

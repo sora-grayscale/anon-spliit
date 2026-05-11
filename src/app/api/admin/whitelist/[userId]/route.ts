@@ -3,6 +3,7 @@
  */
 
 import { auth, isPrivateInstance } from '@/lib/auth'
+import { passwordChangeRequiredResponse } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { randomBytes } from 'crypto'
@@ -35,6 +36,9 @@ export async function PATCH(
     if (!session?.user?.isAdmin) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    const pwChangeResp = passwordChangeRequiredResponse(session)
+    if (pwChangeResp) return pwChangeResp
 
     // Check if user exists
     const user = await prisma.whitelistUser.findUnique({
@@ -88,6 +92,9 @@ export async function DELETE(
     if (!session?.user?.isAdmin) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    const pwChangeResp = passwordChangeRequiredResponse(session)
+    if (pwChangeResp) return pwChangeResp
 
     // Check if user exists
     const user = await prisma.whitelistUser.findUnique({
