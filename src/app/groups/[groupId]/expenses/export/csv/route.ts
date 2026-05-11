@@ -1,5 +1,8 @@
 import { getCategoryInfo } from '@/app/groups/[groupId]/expenses/category-icon'
+import { auth } from '@/lib/auth'
+import { escapeCsvCell, escapeCsvRow } from '@/lib/csv-injection'
 import { getCurrency } from '@/lib/currency'
+import { env } from '@/lib/env'
 import {
   formatAmountAsDecimal,
   getCurrencyFromGroup,
@@ -31,6 +34,31 @@ export async function GET(
   req: Request,
   { params }: { params: Promise<{ groupId: string }> },
 ) {
+  // Require authentication in private instance mode (Issue #136).
+  // Public instances retain the share-by-URL model (group access is gated
+  // by the encryption key in the URL fragment).
+  if (env.PRIVATE_INSTANCE) {
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 },
+      )
+    }
+    if (session.user.requiresTwoFactor) {
+      return NextResponse.json(
+        { error: 'Two-factor authentication required' },
+        { status: 401 },
+      )
+    }
+    if (session.user.mustChangePassword) {
+      return NextResponse.json(
+        { error: 'Password change required' },
+        { status: 403 },
+      )
+    }
+  }
+
   const { groupId } = await params
   const group = await prisma.group.findUnique({
     where: { id: groupId },
@@ -88,6 +116,10 @@ export async function GET(
 
   */
 
+  // Escape user-provided participant names in the column headers as well to
+  // prevent formula injection via header rows (Issue #136). The value key
+  // still uses the raw name so json2csv can look up the corresponding cell
+  // in each row.
   const fields = [
     { label: 'Date', value: 'date' },
     { label: 'Description', value: 'title' },
@@ -100,7 +132,7 @@ export async function GET(
     { label: 'Is Reimbursement', value: 'isReimbursement' },
     { label: 'Split mode', value: 'splitMode' },
     ...group.participants.map((participant) => ({
-      label: participant.name,
+      label: escapeCsvCell(participant.name) as string,
       value: participant.name,
     })),
   ]
@@ -110,7 +142,7 @@ export async function GET(
   const expenses = group.expenses.map((expense) => {
     const expenseAmount = toNumber(expense.amount)
 
-    return {
+    return escapeCsvRow({
       date: formatDate(expense.expenseDate),
       title: expense.title,
       categoryName: getCategoryInfo(expense.categoryId)?.name || '',
@@ -153,7 +185,7 @@ export async function GET(
           ]
         }),
       ),
-    }
+    })
   })
 
   const json2csvParser = new Parser({ fields })
