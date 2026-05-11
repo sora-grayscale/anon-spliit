@@ -53,6 +53,8 @@ export async function POST() {
         data: {
           twoFactorSecret: encryptedSecret,
           twoFactorBackupCodes: encryptedBackupCodes,
+          // Clear any stale verification timestamp from a previous setup (Issue #139)
+          lastTwoFactorVerifiedAt: null,
           // Keep twoFactorEnabled=false until user verifies with a valid token
         },
       })
@@ -62,6 +64,8 @@ export async function POST() {
         data: {
           twoFactorSecret: encryptedSecret,
           twoFactorBackupCodes: encryptedBackupCodes,
+          // Clear any stale verification timestamp from a previous setup (Issue #139)
+          lastTwoFactorVerifiedAt: null,
           // Keep twoFactorEnabled=false until user verifies with a valid token
         },
       })

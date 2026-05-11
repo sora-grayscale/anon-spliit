@@ -129,16 +129,19 @@ export async function POST(request: Request) {
     // Clear rate limit attempts on successful verification
     clearAttempts(rateLimitKey)
 
-    // 5. If valid, set twoFactorEnabled=true
+    // 5. If valid, set twoFactorEnabled=true and record the verification time
+    // so the jwt callback's 5-minute window treats this setup as the latest
+    // verification (Issue #139).
+    const now = new Date()
     if (isAdmin) {
       await prisma.admin.update({
         where: { id: userId },
-        data: { twoFactorEnabled: true },
+        data: { twoFactorEnabled: true, lastTwoFactorVerifiedAt: now },
       })
     } else {
       await prisma.whitelistUser.update({
         where: { id: userId },
-        data: { twoFactorEnabled: true },
+        data: { twoFactorEnabled: true, lastTwoFactorVerifiedAt: now },
       })
     }
 
