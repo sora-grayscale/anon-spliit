@@ -1,16 +1,21 @@
 import { randomId } from '@/lib/api'
 import { auth } from '@/lib/auth'
 import { env } from '@/lib/env'
+import { getSafeImageExtension } from '@/lib/safe-filename'
 import { POST as s3Route } from 'next-s3-upload/route'
 import { NextRequest, NextResponse } from 'next/server'
 
 // Configure the S3 upload handler
 const s3Handler = s3Route.configure({
   key(req, filename) {
-    const [, extension] = filename.match(/(\.[^\.]*)$/) ?? [null, '']
+    // Use a strict whitelist-based extension extractor to prevent path
+    // traversal and MIME spoofing via crafted filenames (Issue #134).
+    // Invalid filenames result in no extension; the client UI restricts
+    // selections to images, so legitimate uploads are unaffected.
+    const extension = getSafeImageExtension(filename)
     const timestamp = new Date().toISOString()
     const random = randomId()
-    return `document-${timestamp}-${random}${extension.toLowerCase()}`
+    return `document-${timestamp}-${random}${extension}`
   },
   endpoint: env.S3_UPLOAD_ENDPOINT,
   // forcing path style is only necessary for providers other than AWS
