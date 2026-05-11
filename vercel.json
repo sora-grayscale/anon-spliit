@@ -7,7 +7,7 @@
     },
     {
       "path": "/api/cron/recurring",
-      "schedule": "0 * * * *"
+      "schedule": "0 2 * * *"
     }
   ]
 }
