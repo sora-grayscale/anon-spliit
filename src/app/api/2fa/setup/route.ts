@@ -29,6 +29,17 @@ export async function POST() {
     const isAdmin = session.user.isAdmin
     const userEmail = session.user.email
 
+    // Check if 2FA is already enabled — prevent re-init overwrite
+    const existingUser = isAdmin
+      ? await prisma.admin.findUnique({ where: { id: userId } })
+      : await prisma.whitelistUser.findUnique({ where: { id: userId } })
+    if (existingUser?.twoFactorEnabled) {
+      return NextResponse.json(
+        { error: '2FA is already enabled. Disable it first before re-initializing.' },
+        { status: 400 }
+      )
+    }
+
     // 2. Generate TOTP secret
     const { secret, otpauthUrl } = generateTOTPSecret(userEmail)
 
