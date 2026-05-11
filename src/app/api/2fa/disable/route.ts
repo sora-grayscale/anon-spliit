@@ -33,6 +33,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // Enforce password change before allowing 2FA operations
+    if (session.user.mustChangePassword) {
+      return NextResponse.json(
+        { error: 'You must change your password before managing 2FA' },
+        { status: 403 },
+      )
+    }
+
     const userId = session.user.id
     const isAdmin = session.user.isAdmin
 
