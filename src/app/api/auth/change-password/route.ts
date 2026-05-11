@@ -108,13 +108,16 @@ export async function POST(request: Request) {
     // Hash new password
     const hashedPassword = await bcrypt.hash(newPassword, 12)
 
-    // Update password and clear mustChangePassword flag
+    // Update password and clear mustChangePassword flag.
+    // Set passwordChangedAt to invalidate all JWTs issued before now (Issue #135).
+    const now = new Date()
     if (isAdmin) {
       await prisma.admin.update({
         where: { id: userId },
         data: {
           password: hashedPassword,
           mustChangePassword: false,
+          passwordChangedAt: now,
         },
       })
     } else {
@@ -123,6 +126,7 @@ export async function POST(request: Request) {
         data: {
           password: hashedPassword,
           mustChangePassword: false,
+          passwordChangedAt: now,
         },
       })
     }
