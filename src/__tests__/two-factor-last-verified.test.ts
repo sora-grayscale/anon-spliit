@@ -138,6 +138,10 @@ describe('POST /api/2fa/setup — clears stale lastTwoFactorVerifiedAt (Issue #1
     const { POST } = await import('@/app/api/2fa/setup/route')
     mockedAuth.mockResolvedValue(makeSession(isAdmin))
     const table = isAdmin ? mockedPrisma.admin : mockedPrisma.whitelistUser
+    // jest.clearAllMocks() preserves mockResolvedValue from earlier describes
+    // (it only clears call history), so explicitly set findUnique here to
+    // bypass the Issue #140 already-enabled guard added in src/app/api/2fa/setup/route.ts.
+    table.findUnique.mockResolvedValue({ twoFactorEnabled: false })
     table.update.mockResolvedValue({})
     return POST()
   }

@@ -33,6 +33,31 @@ export async function POST() {
     const isAdmin = session.user.isAdmin
     const userEmail = session.user.email
 
+    // Block re-init when 2FA is already enabled (Issue #140).
+    // Use DB rather than session.user.twoFactorEnabled because the JWT may
+    // be stale (e.g. the user disabled 2FA on another device).
+    let alreadyEnabled = false
+    if (isAdmin) {
+      const admin = await prisma.admin.findUnique({
+        where: { id: userId },
+        select: { twoFactorEnabled: true },
+      })
+      alreadyEnabled = admin?.twoFactorEnabled ?? false
+    } else {
+      const whitelistUser = await prisma.whitelistUser.findUnique({
+        where: { id: userId },
+        select: { twoFactorEnabled: true },
+      })
+      alreadyEnabled = whitelistUser?.twoFactorEnabled ?? false
+    }
+
+    if (alreadyEnabled) {
+      return NextResponse.json(
+        { error: '2FA is already enabled. Please disable first.' },
+        { status: 400 },
+      )
+    }
+
     // 2. Generate TOTP secret
     const { secret, otpauthUrl } = generateTOTPSecret(userEmail)
 
