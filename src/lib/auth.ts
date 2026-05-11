@@ -8,6 +8,7 @@ import {
   clearAttempts,
   recordFailedAttempt,
 } from '@/lib/rate-limit'
+import { isJwtValidForUser } from '@/lib/session-validation'
 import { PrismaAdapter } from '@auth/prisma-adapter'
 import bcrypt from 'bcryptjs'
 import NextAuth, { type NextAuthConfig } from 'next-auth'
@@ -191,11 +192,31 @@ const authConfig: NextAuthConfig = {
           }
         }
       }
+
+      // Invalidate the token if the user's password has been changed since the
+      // token was issued (Issue #135). The check runs on every JWT callback,
+      // backed by a single indexed DB lookup. Users that never changed their
+      // password since the migration have `passwordChangedAt = null` and are
+      // unaffected.
+      if (token.sub && typeof token.iat === 'number') {
+        const isAdmin = (token as Record<string, unknown>).isAdmin === true
+        const ok = await isJwtValidForUser(token.sub, isAdmin, token.iat)
+        if (!ok) {
+          // Return a token without `sub` so the session callback rejects it.
+          return { ...token, sub: undefined }
+        }
+      }
+
       return token
     },
     async session({ session, token }) {
+      // Token sub is cleared by the jwt callback when the token has been
+      // invalidated (e.g. password changed after issuance, Issue #135).
+      // Returning the session with no user.id causes downstream auth checks
+      // (publicProcedure, adminProcedure, route guards) to treat the request
+      // as unauthenticated.
       if (session.user) {
-        session.user.id = token.sub as string
+        session.user.id = (token.sub as string) ?? ''
         session.user.isAdmin =
           ((token as Record<string, unknown>).isAdmin as boolean) ?? false
         session.user.mustChangePassword =
