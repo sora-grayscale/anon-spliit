@@ -110,14 +110,6 @@ To enable expense document uploads (requires S3-compatible storage):
 | `S3_UPLOAD_REGION` | S3 region (e.g., `us-east-1`) |
 | `S3_UPLOAD_ENDPOINT` | S3 endpoint (for non-AWS providers like Cloudflare R2) |
 
-### AI Features (Optional)
-
-| Variable | Description |
-|----------|-------------|
-| `NEXT_PUBLIC_ENABLE_RECEIPT_EXTRACT` | Set to `true` to enable receipt OCR |
-| `NEXT_PUBLIC_ENABLE_CATEGORY_EXTRACT` | Set to `true` to enable category extraction |
-| `OPENAI_API_KEY` | OpenAI API key (required if above features enabled) |
-
 ## Step 5: Verify Deployment
 
 1. Visit your deployment URL

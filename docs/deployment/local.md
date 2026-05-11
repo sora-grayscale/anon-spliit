@@ -97,14 +97,6 @@ Visit [http://localhost:3000](http://localhost:3000)
 | `S3_UPLOAD_REGION` | - | S3 region |
 | `S3_UPLOAD_ENDPOINT` | - | S3 endpoint (non-AWS) |
 
-### AI Features
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `NEXT_PUBLIC_ENABLE_RECEIPT_EXTRACT` | `false` | Enable receipt OCR |
-| `NEXT_PUBLIC_ENABLE_CATEGORY_EXTRACT` | `false` | Enable category extraction |
-| `OPENAI_API_KEY` | - | OpenAI API key |
-
 ### Other
 
 | Variable | Default | Description |

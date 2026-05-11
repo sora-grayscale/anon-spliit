@@ -278,31 +278,6 @@
       "retry": "Ulangi"
     }
   },
-  "CreateFromReceipt": {
-    "Dialog": {
-      "triggerTitle": "Buat pengeluaran dari tanda terima",
-      "title": "Buat dari tanda terima",
-      "description": "Ekstrak informasi pengeluaran dari foto tanda terima.",
-      "body": "Unggah foto struk, dan kami akan memindainya untuk mengekstrak informasi pengeluaran jika memungkinkan.",
-      "selectImage": "Pilih gambar…",
-      "titleLabel": "Judul:",
-      "categoryLabel": "Kategori:",
-      "amountLabel": "Jumlah:",
-      "dateLabel": "Tanggal:",
-      "editNext": "Anda dapat mengedit informasi pengeluaran berikutnya.",
-      "continue": "Lanjutkan"
-    },
-    "unknown": "Tidak diketahui",
-    "TooBigToast": {
-      "title": "File terlalu besar",
-      "description": "Ukuran file maksimum yang dapat Anda unggah adalah {maxSize}. Ukuran file Anda adalah {size}."
-    },
-    "ErrorToast": {
-      "title": "Error saat mengunggah dokumen",
-      "description": "Terjadi kesalahan saat mengunggah dokumen. Silakan coba lagi nanti atau pilih file lain.",
-      "retry": "Ulangi"
-    }
-  },
   "Balances": {
     "title": "Saldo",
     "description": "Ini adalah jumlah yang dibayarkan atau yang diterima oleh setiap peserta.",

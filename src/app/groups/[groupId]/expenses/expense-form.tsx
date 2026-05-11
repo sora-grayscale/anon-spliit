@@ -68,7 +68,6 @@ import { useEffect, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { match } from 'ts-pattern'
 import { DeletePopup } from '../../../../components/delete-popup'
-import { extractCategoryFromTitle } from '../../../../components/expense-form-actions'
 import { Textarea } from '../../../../components/ui/textarea'
 
 const enforceCurrencyPattern = (value: string) =>
@@ -307,7 +306,6 @@ export function ExpenseForm({
     name: 'originalCurrency',
   })
 
-  const [isCategoryLoading, setCategoryLoading] = useState(false)
   const activeUserId = useActiveUser(group.id)
 
   const submit = async (values: ExpenseFormValues) => {
@@ -499,17 +497,6 @@ export function ExpenseForm({
                       placeholder={t(`${sExpense}.TitleField.placeholder`)}
                       className="text-base"
                       {...field}
-                      onBlur={async () => {
-                        field.onBlur() // avoid skipping other blur event listeners since we overwrite `field`
-                        if (runtimeFeatureFlags.enableCategoryExtract) {
-                          setCategoryLoading(true)
-                          const { categoryId } = await extractCategoryFromTitle(
-                            field.value,
-                          )
-                          form.setValue('category', categoryId)
-                          setCategoryLoading(false)
-                        }
-                      }}
                     />
                   </FormControl>
                   <FormDescription>
@@ -699,7 +686,7 @@ export function ExpenseForm({
                       Number(form.watch(field.name)) || 0
                     }
                     onValueChange={field.onChange}
-                    isLoading={isCategoryLoading}
+                    isLoading={false}
                   />
                   <FormDescription>
                     {t(`${sExpense}.categoryFieldDescription`)}

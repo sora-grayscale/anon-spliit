@@ -241,31 +241,6 @@
       "retry": "Riprova"
     }
   },
-  "CreateFromReceipt": {
-    "Dialog": {
-      "triggerTitle": "Crea spesa dalla ricevuta",
-      "title": "Crea dalla ricevuta",
-      "description": "Estrai le informazioni sulla spesa da una foto della ricevuta.",
-      "body": "Carica la foto di una ricevuta e, se possibile, la scannerizzeremo per estrarre le informazioni sulle spese.",
-      "selectImage": "Seleziona immagine…",
-      "titleLabel": "Titolo:",
-      "categoryLabel": "Categoria:",
-      "amountLabel": "Importo:",
-      "dateLabel": "Data:",
-      "editNext": "Successivamente potrai modificare le informazioni sulle spese.",
-      "continue": "Continua"
-    },
-    "unknown": "Sconosciuto",
-    "TooBigToast": {
-      "title": "Il file è troppo grande",
-      "description": "La dimensione massima del file che puoi caricare è {maxSize}. Il tuo è {size}."
-    },
-    "ErrorToast": {
-      "title": "Errore durante il caricamento del documento",
-      "description": "Si è verificato un errore durante il caricamento del documento. Riprova più tardi o seleziona un file diverso.",
-      "retry": "Riprova"
-    }
-  },
   "Balances": {
     "title": "Bilanci",
     "description": "Questo è l'importo che ciascun partecipante ha pagato o deve pagare.",

@@ -218,21 +218,6 @@
       "retry": "Yritä uudelleen"
     }
   },
-  "CreateFromReceipt": {
-    "Dialog": {
-      "triggerTitle": "Luo kulu kuitista",
-      "title": "Luo kuitista",
-      "description": "Lue kuitin valokuvasta kulun tiedot.",
-      "body": "Lataa kuitista valokuva. Siitä skannataan tiedot kulua varten.",
-      "selectImage": "Valitse kuva…",
-      "titleLabel": "Otsikko:",
-      "categoryLabel": "Kategoria:",
-      "amountLabel": "Summa:",
-      "dateLabel": "Päivä:",
-      "editNext": "Voit muokata kulun tietoja seuraavaksi.",
-      "continue": "Jatka"
-    }
-  },
   "Balances": {
     "title": "Saldo",
     "description": "Osallistujien saatavat tai velat.",

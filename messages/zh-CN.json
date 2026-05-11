@@ -257,31 +257,6 @@
       "retry": "重试"
     }
   },
-  "CreateFromReceipt": {
-    "Dialog": {
-      "triggerTitle": "从收据中创建消费",
-      "title": "从收据中创建",
-      "description": "从收据照片上提取消费信息。",
-      "body": "上传收据的图片，我们会尽可能地从中扫描出消费信息。",
-      "selectImage": "选择图片……",
-      "titleLabel": "标题：",
-      "categoryLabel": "类别：",
-      "amountLabel": "金额：",
-      "dateLabel": "日期：",
-      "editNext": "你之后可以修改消费的信息。",
-      "continue": "继续"
-    },
-    "unknown": "未知",
-    "TooBigToast": {
-      "title": "文件过大",
-      "description": "可上传的最大文件大小为{maxSize}，你的文件为{size}。"
-    },
-    "ErrorToast": {
-      "title": "上传文档时发生错误",
-      "description": "上传文档时发生了一些错误。请稍后重试或更换文件。",
-      "retry": "重试"
-    }
-  },
   "Balances": {
     "title": "余额",
     "description": "这是每位群组成员支付或被支付的金额。",

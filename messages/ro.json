@@ -218,31 +218,6 @@
       "retry": "Reîncearcă"
     }
   },
-  "CreateFromReceipt": {
-    "Dialog": {
-      "triggerTitle": "Adaugă o cheltuială dintr-un bon",
-      "title": "Adaugă din bon",
-      "description": "Extrage informații despre cheltuială dintr-o poză cu bonul.",
-      "body": "Adaugă o poză cu bonul și vom încerca să o scanăm pentru a extrage informații despre cheltuială.",
-      "selectImage": "Selectează o imagine…",
-      "titleLabel": "Titlu:",
-      "categoryLabel": "Categorie:",
-      "amountLabel": "Sumă:",
-      "dateLabel": "Data:",
-      "editNext": "Vei putea sa modifici informațiile despre cheltuială în continuare.",
-      "continue": "Continuă"
-    },
-    "unknown": "Necunoscut",
-    "TooBigToast": {
-      "title": "Fișierul este prea mare",
-      "description": "Dimensiunea maximă a fișierului pe care il poți atașa este {maxSize}. Fișierul tău are {size}."
-    },
-    "ErrorToast": {
-      "title": "Eroare la adăugarea documentului.",
-      "description": "Ceva a mers greșit la adăugarea fișierului. Încearcă mai târziu sau cum un alt fișier.",
-      "retry": "Reîncearcă"
-    }
-  },
   "Balances": {
     "title": "Solduri",
     "description": "Aceasta este suma pe care fiecare membru a plătit-o sau cu care a fost plătit.",

@@ -349,28 +349,6 @@
       "description": "문서 업로드 중 오류가 발생했습니다. 나중에 다시 시도하거나 다른 파일을 선택해 주세요."
     }
   },
-  "CreateFromReceipt": {
-    "Dialog": {
-      "triggerTitle": "영수증으로 지출 추가하기",
-      "description": "영수증 사진으로 지출 내역을 자동으로 불러와요.",
-      "body": "영수증 사진을 업로드하면, 가능하면 지출 정보를 스캔해서 추출해 드려요.",
-      "selectImage": "사진 선택하기…",
-      "titleLabel": "제목:",
-      "categoryLabel": "카테고리:",
-      "amountLabel": "금액:",
-      "dateLabel": "날짜:",
-      "editNext": "다음 단계에서 지출 정보를 수정할 수 있습니다.",
-      "continue": "계속하기"
-    },
-    "TooBigToast": {
-      "title": "파일이 너무 커요",
-      "description": "업로드 가능한 최대 파일 크기: {maxSize}, 현재 파일 크기: {size}입니다."
-    },
-    "ErrorToast": {
-      "title": "문서 업로드 중 오류가 발생했어요",
-      "description": "문서 업로드 중 오류가 발생했습니다. 나중에 다시 시도하거나 다른 파일을 선택해 주세요."
-    }
-  },
   "Information": {
     "title": "정보",
     "empty": "아직 그룹 정보가 없어요."
