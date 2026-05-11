@@ -197,26 +197,41 @@ const authConfig: NextAuthConfig = {
       // token was issued (Issue #135). The check runs on every JWT callback,
       // backed by a single indexed DB lookup. Users that never changed their
       // password since the migration have `passwordChangedAt = null` and are
-      // unaffected.
+      // unaffected. When invalid, we clear the auth-relevant fields so the
+      // session callback yields a session without a user id, which causes
+      // downstream guards (publicProcedure, adminProcedure, route handlers)
+      // that test `session?.user?.id` to treat the request as unauthenticated.
       if (token.sub && typeof token.iat === 'number') {
         const isAdmin = (token as Record<string, unknown>).isAdmin === true
         const ok = await isJwtValidForUser(token.sub, isAdmin, token.iat)
         if (!ok) {
-          // Return a token without `sub` so the session callback rejects it.
-          return { ...token, sub: undefined }
+          return {
+            // Preserve only the bare token shell; strip identity and roles.
+            ...token,
+            sub: undefined,
+            isAdmin: false,
+            mustChangePassword: false,
+            twoFactorEnabled: false,
+            requiresTwoFactor: false,
+          } as typeof token
         }
       }
 
       return token
     },
     async session({ session, token }) {
-      // Token sub is cleared by the jwt callback when the token has been
-      // invalidated (e.g. password changed after issuance, Issue #135).
-      // Returning the session with no user.id causes downstream auth checks
-      // (publicProcedure, adminProcedure, route guards) to treat the request
-      // as unauthenticated.
+      // When the jwt callback invalidates a token (e.g. password changed after
+      // issuance, Issue #135), `token.sub` is cleared. We drop `session.user`
+      // entirely so callers that inspect either `session?.user` or
+      // `session?.user?.id` see no authenticated user.
+      if (!token.sub) {
+        return {
+          ...session,
+          user: undefined,
+        } as unknown as typeof session
+      }
       if (session.user) {
-        session.user.id = (token.sub as string) ?? ''
+        session.user.id = token.sub as string
         session.user.isAdmin =
           ((token as Record<string, unknown>).isAdmin as boolean) ?? false
         session.user.mustChangePassword =
