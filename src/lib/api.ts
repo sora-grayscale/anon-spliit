@@ -452,7 +452,10 @@ export async function getGroupExpenses(
   groupId: string,
   options?: { offset?: number; length?: number; filter?: string },
 ) {
-  await createRecurringExpenses()
+  // Process only this group's recurring links to avoid cross-tenant DoS via
+  // unauthenticated list calls (Issue #132). Full-fleet processing lives in
+  // the dedicated /api/cron/recurring endpoint for self-hosted setups.
+  await createRecurringExpenses(groupId)
 
   return prisma.expense.findMany({
     select: {
@@ -558,7 +561,17 @@ const MAX_RETRY_COUNT = 3
 // Subsequent invocations will continue processing where this run left off.
 export const MAX_GENERATIONS_PER_RUN = 100
 
-async function createRecurringExpenses() {
+/**
+ * Process pending recurring expense links and materialize the missed expenses.
+ *
+ * @param groupId - When provided, only links whose `currentFrameExpense`
+ *   belongs to this group are processed. This is the path used by
+ *   `getGroupExpenses` so an unauthenticated read on one group cannot
+ *   trigger work for the entire instance (Issue #132).
+ *   When omitted, all eligible links are processed; this mode is intended
+ *   for the cron endpoint at `/api/cron/recurring`.
+ */
+export async function createRecurringExpenses(groupId?: string) {
   const localDate = new Date() // Current local date
   const utcDateFromLocal = new Date(
     Date.UTC(
@@ -582,6 +595,8 @@ async function createRecurringExpenses() {
         retryCount: {
           lt: MAX_RETRY_COUNT,
         },
+        // Scope by groupId when provided (Issue #132)
+        ...(groupId ? { groupId } : {}),
       },
       include: {
         currentFrameExpense: {

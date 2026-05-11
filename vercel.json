@@ -4,6 +4,10 @@
     {
       "path": "/api/cron/auto-delete",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/recurring",
+      "schedule": "0 2 * * *"
     }
   ]
 }
