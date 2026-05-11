@@ -205,6 +205,7 @@ export async function POST(request: Request) {
           twoFactorEnabled: false,
           twoFactorSecret: null,
           twoFactorBackupCodes: null,
+          lastTwoFactorVerifiedAt: null,
         },
       })
     } else {
@@ -214,6 +215,7 @@ export async function POST(request: Request) {
           twoFactorEnabled: false,
           twoFactorSecret: null,
           twoFactorBackupCodes: null,
+          lastTwoFactorVerifiedAt: null,
         },
       })
     }
