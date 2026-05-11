@@ -31,7 +31,9 @@ describe('passwordChangeRequiredResponse', () => {
 
   it('returns null when mustChangePassword is false', () => {
     expect(
-      passwordChangeRequiredResponse(makeSession({ mustChangePassword: false })),
+      passwordChangeRequiredResponse(
+        makeSession({ mustChangePassword: false }),
+      ),
     ).toBeNull()
   })
 
