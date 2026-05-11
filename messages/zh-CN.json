@@ -150,7 +150,6 @@
         "description": "选择收入是为谁而收。"
       },
       "splitModeDescription": "选择如何划分这笔收入。",
-      "attachDescription": "查看并为这笔收入附加收据。",
       "currencyField": {
         "label": "收入币种"
       }
@@ -178,7 +177,6 @@
         "description": "选择消费是为谁而支出。"
       },
       "splitModeDescription": "选择如何划分这笔消费。",
-      "attachDescription": "查看并为这笔消费附加收据。",
       "currencyField": {
         "label": "支出币种"
       },
@@ -222,7 +220,6 @@
       "yes": "确定",
       "cancel": "取消"
     },
-    "attachDocuments": "附加文档",
     "create": "创建",
     "creating": "创建中……",
     "save": "保存",
@@ -244,17 +241,6 @@
       "noDate": "请输入交易发生日期来获取当天的汇率。",
       "refresh": "刷新",
       "customRate": "使用自定义汇率"
-    }
-  },
-  "ExpenseDocumentsInput": {
-    "TooBigToast": {
-      "title": "文件过大",
-      "description": "可上传的最大文件大小为{maxSize}，你的文件为{size}。"
-    },
-    "ErrorToast": {
-      "title": "上传文档时发生错误",
-      "description": "上传文档时发生了一些错误。请稍后重试或更换文件。",
-      "retry": "重试"
     }
   },
   "Balances": {

@@ -321,7 +321,6 @@ describe('API data access layer', () => {
         amount: '1000',
         paidBy: { id: 'p1', name: 'Alice' },
         paidFor: [{ participantId: 'p2', shares: '500' }],
-        documents: [],
         recurringExpenseLink: null,
       }
       ;(mockExpense.findFirst as jest.Mock).mockResolvedValue(mockFoundExpense)
@@ -337,7 +336,6 @@ describe('API data access layer', () => {
         include: {
           paidBy: true,
           paidFor: true,
-          documents: true,
           recurringExpenseLink: true,
         },
       })

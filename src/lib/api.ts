@@ -107,16 +107,6 @@ export async function createExpense(
           },
         },
         isReimbursement: expenseFormValues.isReimbursement,
-        documents: {
-          createMany: {
-            data: expenseFormValues.documents.map((doc) => ({
-              id: randomId(),
-              url: doc.url,
-              width: doc.width,
-              height: doc.height,
-            })),
-          },
-        },
         notes: expenseFormValues.notes,
       },
     })
@@ -301,22 +291,6 @@ export async function updateExpense(
           delete: isDeleteRecurrenceExpenseLink,
         },
         isReimbursement: expenseFormValues.isReimbursement,
-        documents: {
-          connectOrCreate: expenseFormValues.documents.map((doc) => ({
-            create: doc,
-            where: { id: doc.id },
-          })),
-          deleteMany: existingExpense.documents
-            .filter(
-              (existingDoc) =>
-                !expenseFormValues.documents.some(
-                  (doc) => doc.id === existingDoc.id,
-                ),
-            )
-            .map((doc) => ({
-              id: doc.id,
-            })),
-        },
         notes: expenseFormValues.notes,
       },
     })
@@ -475,7 +449,6 @@ export async function getGroupExpenses(
       splitMode: true,
       recurrenceRule: true,
       title: true,
-      _count: { select: { documents: true } },
     },
     where: {
       groupId,
@@ -504,7 +477,6 @@ export async function getExpense(groupId: string, expenseId: string) {
       paidBy: true,
       paidFor: true,
       // categoryId is a scalar field (encrypted string), not a relation - automatically included
-      documents: true,
       recurringExpenseLink: true,
     },
   })
@@ -604,7 +576,6 @@ export async function createRecurringExpenses(groupId?: string) {
             paidBy: true,
             paidFor: true,
             // categoryId is a scalar field, automatically included
-            documents: true,
           },
         },
       },
@@ -640,7 +611,6 @@ export async function createRecurringExpenses(groupId?: string) {
         // category relation removed for E2EE (Issue #19) - categoryId is now a scalar field
         paidBy,
         paidFor,
-        documents,
         ...destructeredCurrentExpenseRecord
       } = currentExpenseRecord
 
@@ -661,13 +631,6 @@ export async function createRecurringExpenses(groupId?: string) {
                   })),
                 },
               },
-              documents: {
-                connect: currentExpenseRecord.documents.map(
-                  (documentRecord) => ({
-                    id: documentRecord.id,
-                  }),
-                ),
-              },
               id: newExpenseId,
               expenseDate: newExpenseDate,
               recurringExpenseLink: {
@@ -681,7 +644,6 @@ export async function createRecurringExpenses(groupId?: string) {
             // Ensure that the same information is available on the returned record that was created
             include: {
               paidFor: true,
-              documents: true,
               // categoryId is a scalar field, automatically included
               paidBy: true,
             },

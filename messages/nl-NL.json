@@ -159,7 +159,6 @@
         "description": "Selecteer voor wie het inkomen is ontvangen."
       },
       "splitModeDescription": "Selecteer hoe het inkomen verdeeld moet worden.",
-      "attachDescription": "Bekijk en voeg bijlagen toe aan het inkomen.",
       "currencyField": {
         "label": "Munteenheid van inkomen",
         "description": "De munteenheid waar het inkomen in is ontvangen."
@@ -196,7 +195,6 @@
         "description": "Selecteer voor wie de uitgave is gedaan."
       },
       "splitModeDescription": "Selecteer hoe de uitgave verdeeld moet worden.",
-      "attachDescription": "Bekijk en voeg bijlagen toe aan de uitgave.",
       "currencyField": {
         "label": "Munteenheid van uitgave",
         "description": "De munteenheid waar de uitgave in is betaald."
@@ -233,7 +231,6 @@
       "yes": "Ja",
       "cancel": "Annuleer"
     },
-    "attachDocuments": "Voeg documenten toe",
     "create": "Maken",
     "creating": "Aan het maken…",
     "save": "Opslaan",
@@ -260,17 +257,6 @@
       "dateMismatch": "Wisselkoers van: {date}",
       "refresh": "Ververs",
       "customRate": "Aangepaste wisselkoers wordt gebruikt"
-    }
-  },
-  "ExpenseDocumentsInput": {
-    "TooBigToast": {
-      "title": "Het bestand is te groot",
-      "description": "De maximum bestandsgrootte {maxSize}. Jouw bestand is {size}."
-    },
-    "ErrorToast": {
-      "title": "Fout bij het uploaden van document",
-      "description": "Er is iets mis gegaan bij het uploaden van het document. Probeer het later opnieuw of kies een ander bestand.",
-      "retry": "Probeer opnieuw"
     }
   },
   "Balances": {

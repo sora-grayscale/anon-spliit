@@ -142,8 +142,7 @@
         "title": "Otrzymany dla",
         "description": "Podaj dla kogo wpływ był przeznaczony."
       },
-      "splitModeDescription": "Wybierz jak podzielić wpływ.",
-      "attachDescription": "Zobacz i załącz rachunki do wpływu."
+      "splitModeDescription": "Wybierz jak podzielić wpływ."
     },
     "Expense": {
       "create": "Stwórz wydatek",
@@ -174,8 +173,7 @@
         "title": "Opłacone dla",
         "description": "Wybierz kogo dotyczył wydatek."
       },
-      "splitModeDescription": "Wybierz jak podzielić wydatek.",
-      "attachDescription": "Zobacz i załącz rachunki do wydatku."
+      "splitModeDescription": "Wybierz jak podzielić wydatek."
     },
     "amountField": {
       "label": "Suma"
@@ -208,24 +206,12 @@
       "yes": "Tak",
       "cancel": "Anuluj"
     },
-    "attachDocuments": "Załącz dokumenty",
     "create": "Stwórz",
     "creating": "Tworzenie…",
     "save": "Zapisz",
     "saving": "Zapisywanie…",
     "cancel": "Anuluj",
     "reimbursement": "Zwrot środków"
-  },
-  "ExpenseDocumentsInput": {
-    "TooBigToast": {
-      "title": "Ten plik jest zbyt duży",
-      "description": "Maksymalny rozmiar pliku to {maxSize}. Twój plik ma {size}."
-    },
-    "ErrorToast": {
-      "title": "Błąd podczas wysyłania dokumentu",
-      "description": "Coś poszło nie tak podczas wysyłania dokumentu. Proszę spróbuj ponownie później, albo wybierz inny plik.",
-      "retry": "Ponów"
-    }
   },
   "Balances": {
     "title": "Salda",

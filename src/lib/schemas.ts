@@ -190,17 +190,6 @@ export const expenseFormSchema = z
       .default('EVENLY'),
     saveDefaultSplittingOptions: z.boolean(),
     isReimbursement: z.boolean(),
-    documents: z
-      .array(
-        z.object({
-          id: z.string(),
-          url: z.string().url(),
-          width: z.number().int().min(1).max(10000),
-          height: z.number().int().min(1).max(10000),
-        }),
-      )
-      .max(100)
-      .default([]),
     notes: z.string().optional(),
     recurrenceRule: z
       .enum<

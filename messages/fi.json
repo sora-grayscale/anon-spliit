@@ -141,8 +141,7 @@
         "title": "Tulon jakaminen",
         "description": "Valitse kenelle tulo jaetaan."
       },
-      "splitModeDescription": "Valitse miten tulo jaetaan osallistujien kesken.",
-      "attachDescription": "Katso ja liitä tuloon liittyviä kuitteja."
+      "splitModeDescription": "Valitse miten tulo jaetaan osallistujien kesken."
     },
     "Expense": {
       "create": "Lisää kulu",
@@ -165,8 +164,7 @@
         "title": "Kulun jakaminen",
         "description": "Valitse ketkä osallistuvat kuluun."
       },
-      "splitModeDescription": "Valitse miten kulu jaetaan osallistujien kesken.",
-      "attachDescription": "Katso ja liitä kuluun liittyviä kuitteja."
+      "splitModeDescription": "Valitse miten kulu jaetaan osallistujien kesken."
     },
     "amountField": {
       "label": "Summa"
@@ -199,24 +197,12 @@
       "yes": "Kyllä",
       "cancel": "Peruuta"
     },
-    "attachDocuments": "Liitä dokumenttejä",
     "create": "Lisää kulu",
     "creating": "Luodaan kulua…",
     "save": "Tallenna",
     "saving": "Tallennetaan…",
     "cancel": "Peruuta",
     "reimbursement": "Velanmaksu"
-  },
-  "ExpenseDocumentsInput": {
-    "TooBigToast": {
-      "title": "Tiedosto on liian suuri",
-      "description": "Maksimikoko ladattavalle tiedostolle on {maxSize}. Tiedostosi on {size}."
-    },
-    "ErrorToast": {
-      "title": "Virhe tiedostoa ladattaessa",
-      "description": "Jokin meni vikaan dokumentin lataamisessa. Yritä myöhemmin uudelleen tai valitse toinen tiedosto.",
-      "retry": "Yritä uudelleen"
-    }
   },
   "Balances": {
     "title": "Saldo",

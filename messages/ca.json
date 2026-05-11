@@ -159,7 +159,6 @@
         "description": "Selecciona per a qui s'ha efectuat el pagament."
       },
       "splitModeDescription": "Selecciona com vols dividir la despesa.",
-      "attachDescription": "Veure i adjuntar tiquets a la despesa.",
       "currencyField": {
         "label": "Moneda del ingrés",
         "description": "La moneda en la que l'ingrés va ser rebut."
@@ -188,7 +187,6 @@
         "description": "Sleecciona per a qui s'ha pagat la despesa."
       },
       "splitModeDescription": "Selecciona com vols dividir la despesa.",
-      "attachDescription": "eure i adjuntar tiquets a la despesa.",
       "currencyField": {
         "label": "Moneda de la despesa",
         "description": "La moneda en la que la despesa es va pagar."
@@ -233,7 +231,6 @@
       "yes": "Sí",
       "cancel": "Cancel·lar"
     },
-    "attachDocuments": "Adjuntar documents",
     "create": "Crear",
     "creating": "Creant",
     "save": "Desar",
@@ -260,17 +257,6 @@
       "dateMismatch": "Tases per a la data: {date}",
       "refresh": "Refrescar",
       "customRate": "Emprant tasa personalitzada"
-    }
-  },
-  "ExpenseDocumentsInput": {
-    "TooBigToast": {
-      "title": "L'arxiu és massa gran",
-      "description": "La mida màxima que pot tenir l'arxiu és de {maxSize}. El teu pesa {size}."
-    },
-    "ErrorToast": {
-      "title": "Error al carregar el document",
-      "description": "Hi ha hagut un error al carregar el document. Torna a intentar-ho més tard o selecciona un altre arxiu.",
-      "retry": "Tornar-ho a intentar"
     }
   },
   "Balances": {

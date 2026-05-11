@@ -152,8 +152,7 @@
         "title": "Ricevuto per",
         "description": "Seleziona per chi è stato ricevuto il reddito."
       },
-      "splitModeDescription": "Seleziona come dividere l'entrata.",
-      "attachDescription": "Vedi ed allega la ricevuta per l'entrata."
+      "splitModeDescription": "Seleziona come dividere l'entrata."
     },
     "Expense": {
       "create": "Crea spesa",
@@ -185,8 +184,7 @@
         "title": "Pagato per",
         "description": "Seleleziona per chi è stato pagato."
       },
-      "splitModeDescription": "Seleziona come dividere la spesa.",
-      "attachDescription": "Vedi ed allega la ricevuta per la spesa."
+      "splitModeDescription": "Seleziona come dividere la spesa."
     },
     "amountField": {
       "label": "Importo"
@@ -219,7 +217,6 @@
       "yes": "Si",
       "cancel": "Annulla"
     },
-    "attachDocuments": "Documenti allegati",
     "create": "Crea",
     "creating": "Sto creando…",
     "save": "Salva",
@@ -228,17 +225,6 @@
     "reimbursement": "Rimborso",
     "conversionRateState": {
       "refresh": "Aggiornare"
-    }
-  },
-  "ExpenseDocumentsInput": {
-    "TooBigToast": {
-      "title": "Il file è troppo grande",
-      "description": "La dimensione massima del file che puoi caricare è {maxSize}. Il tuo è {size}."
-    },
-    "ErrorToast": {
-      "title": "Errore durante il caricamento del documento",
-      "description": "Si è verificato un errore durante il caricamento del documento. Riprova più tardi o seleziona un file diverso.",
-      "retry": "Riprova"
     }
   },
   "Balances": {

@@ -62,7 +62,6 @@
     "next": "^16.0.7",
     "next-auth": "5.0.0-beta.30",
     "next-intl": "^4.5.8",
-    "next-s3-upload": "^0.3.4",
     "next-themes": "^0.2.1",
     "next13-progressbar": "^1.1.1",
     "otpauth": "^9.4.1",

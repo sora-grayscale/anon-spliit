@@ -97,19 +97,6 @@ Use your Vercel deployment URL from Step 3:
 
 The admin user is **automatically created** when you first access the login page - no manual initialization required.
 
-### Document Upload (Optional)
-
-To enable expense document uploads (requires S3-compatible storage):
-
-| Variable | Description |
-|----------|-------------|
-| `NEXT_PUBLIC_ENABLE_EXPENSE_DOCUMENTS` | Set to `true` to enable |
-| `S3_UPLOAD_KEY` | S3 access key |
-| `S3_UPLOAD_SECRET` | S3 secret key |
-| `S3_UPLOAD_BUCKET` | S3 bucket name |
-| `S3_UPLOAD_REGION` | S3 region (e.g., `us-east-1`) |
-| `S3_UPLOAD_ENDPOINT` | S3 endpoint (for non-AWS providers like Cloudflare R2) |
-
 ## Step 5: Verify Deployment
 
 1. Visit your deployment URL

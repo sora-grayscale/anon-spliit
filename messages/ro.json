@@ -141,8 +141,7 @@
         "title": "Primit pentru",
         "description": "Selectează pentru cine a fost primit venitul."
       },
-      "splitModeDescription": "Selectează cum să fie împărțit venitul.",
-      "attachDescription": "Vizualizează și atașează bonul pentru venit."
+      "splitModeDescription": "Selectează cum să fie împărțit venitul."
     },
     "Expense": {
       "create": "Adaugă o cheltuială",
@@ -165,8 +164,7 @@
         "title": "Plătit pentru",
         "description": "Selectează pentru cine a fost platită cheltuiala."
       },
-      "splitModeDescription": "Selectează cum să fie împărțită cheltuiala.",
-      "attachDescription": "Vizualizează și atașează bonul pentru cheltuială."
+      "splitModeDescription": "Selectează cum să fie împărțită cheltuiala."
     },
     "amountField": {
       "label": "Sumă"
@@ -199,24 +197,12 @@
       "yes": "Da",
       "cancel": "Anulează"
     },
-    "attachDocuments": "Atașează documente",
     "create": "Adaugă",
     "creating": "Se adaugă…",
     "save": "Salvează",
     "saving": "Se salvează…",
     "cancel": "Anulează",
     "reimbursement": "Rambursare"
-  },
-  "ExpenseDocumentsInput": {
-    "TooBigToast": {
-      "title": "Fișierul este prea mare",
-      "description": "Dimensiunea maximă a fișierului pe care îl poți atașa este {maxSize}. Fișierul tău are {size}."
-    },
-    "ErrorToast": {
-      "title": "Eroare la adăugarea documentului.",
-      "description": "Ceva a mers greșit la adăugarea fișierului. Încearcă mai târziu sau cum un alt fișier.",
-      "retry": "Reîncearcă"
-    }
   },
   "Balances": {
     "title": "Solduri",

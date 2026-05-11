@@ -86,17 +86,6 @@ Visit [http://localhost:3000](http://localhost:3000)
 | `NEXTAUTH_SECRET` | - | JWT signing secret |
 | `NEXTAUTH_URL` | - | App URL for NextAuth |
 
-### Document Upload (S3)
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `NEXT_PUBLIC_ENABLE_EXPENSE_DOCUMENTS` | `false` | Enable document uploads |
-| `S3_UPLOAD_KEY` | - | S3 access key |
-| `S3_UPLOAD_SECRET` | - | S3 secret key |
-| `S3_UPLOAD_BUCKET` | - | S3 bucket name |
-| `S3_UPLOAD_REGION` | - | S3 region |
-| `S3_UPLOAD_ENDPOINT` | - | S3 endpoint (non-AWS) |
-
 ### Other
 
 | Variable | Default | Description |

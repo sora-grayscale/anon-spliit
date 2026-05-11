@@ -154,8 +154,7 @@
         "title": "התקבל עבור",
         "description": "בחר עבור מי התקבלה ההכנסה."
       },
-      "splitModeDescription": "בחר כיצד לפצל את ההכנסה.",
-      "attachDescription": "ראה וצרף קבלות להכנסה."
+      "splitModeDescription": "בחר כיצד לפצל את ההכנסה."
     },
     "Expense": {
       "create": "צור הוצאה",
@@ -191,8 +190,7 @@
         "title": "שולם עבור",
         "description": "בחר עבור מי שולמה ההוצאה."
       },
-      "splitModeDescription": "בחר כיצד לפצל את ההוצאה.",
-      "attachDescription": "ראה וצרף קבלות להוצאה."
+      "splitModeDescription": "בחר כיצד לפצל את ההוצאה."
     },
     "amountField": {
       "label": "סכום"
@@ -246,24 +244,12 @@
       "yes": "כן",
       "cancel": "ביטול"
     },
-    "attachDocuments": "צרף מסמכים",
     "create": "צור",
     "creating": "יוצר…",
     "save": "שמור",
     "saving": "שומר…",
     "cancel": "ביטול",
     "reimbursement": "החזר"
-  },
-  "ExpenseDocumentsInput": {
-    "TooBigToast": {
-      "title": "הקובץ גדול מדי",
-      "description": "גודל הקובץ המקסימלי שאתה יכול להעלות הוא {maxSize}. הקובץ שלך הוא {size}."
-    },
-    "ErrorToast": {
-      "title": "שגיאה בעת העלאת מסמך",
-      "description": "משהו השתבש בעת העלאת המסמך. נסה שוב מאוחר יותר או בחר קובץ אחר.",
-      "retry": "נסה שוב"
-    }
   },
   "Balances": {
     "title": "יתרות",

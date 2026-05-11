@@ -141,8 +141,7 @@
         "title": "Gelirin alındığı kişiler",
         "description": "Gelirin kim(ler) için alındığını seçin."
       },
-      "splitModeDescription": "Gelirin nasıl paylaştırılacağını seçin.",
-      "attachDescription": "Gelire makbuz ekleyin ve görüntüleyin."
+      "splitModeDescription": "Gelirin nasıl paylaştırılacağını seçin."
     },
     "Expense": {
       "create": "Masraf oluştur",
@@ -165,8 +164,7 @@
         "title": "Masraf kimin için ödendi",
         "description": "Masrafın kim(ler) için ödendiğini seçin."
       },
-      "splitModeDescription": "Masrafın nasıl paylaştırılacağını seçin.",
-      "attachDescription": "Masrafa makbuz ekleyin ve görüntüleyin."
+      "splitModeDescription": "Masrafın nasıl paylaştırılacağını seçin."
     },
     "amountField": {
       "label": "Tutar"
@@ -199,24 +197,12 @@
       "yes": "Evet",
       "cancel": "İptal"
     },
-    "attachDocuments": "Belge ekle",
     "create": "Oluştur",
     "creating": "Oluşturuluyor…",
     "save": "Kaydet",
     "saving": "Kaydediliyor…",
     "cancel": "İptal",
     "reimbursement": "Geri ödeme"
-  },
-  "ExpenseDocumentsInput": {
-    "TooBigToast": {
-      "title": "Dosya çok büyük",
-      "description": "Yükleyebileceğiniz maksimum dosya boyutu {maxSize}. Dosyanız {size} boyutunda."
-    },
-    "ErrorToast": {
-      "title": "Belge yüklenirken hata oluştu",
-      "description": "Belge yüklenirken bir sorun oluştu. Lütfen daha sonra tekrar deneyin veya farklı bir dosya seçin.",
-      "retry": "Tekrar dene"
-    }
   },
   "Balances": {
     "title": "Bakiyeler",

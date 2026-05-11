@@ -141,8 +141,7 @@
         "title": "應接收人",
         "description": "選擇應參與此筆收入的成員。"
       },
-      "splitModeDescription": "選擇如何分配此筆收入。",
-      "attachDescription": "查看／附上此筆收入的收據。"
+      "splitModeDescription": "選擇如何分配此筆收入。"
     },
     "Expense": {
       "create": "新增消費紀錄",
@@ -165,8 +164,7 @@
         "title": "應支付人",
         "description": "選擇需參與此筆消費的成員。"
       },
-      "splitModeDescription": "選擇如何分配此筆消費。",
-      "attachDescription": "查看／附上此筆消費的收據。"
+      "splitModeDescription": "選擇如何分配此筆消費。"
     },
     "amountField": {
       "label": "金額"
@@ -199,24 +197,12 @@
       "yes": "確定",
       "cancel": "取消"
     },
-    "attachDocuments": "附件",
     "create": "新增",
     "creating": "新增中……",
     "save": "儲存",
     "saving": "儲存中……",
     "cancel": "取消",
     "reimbursement": "報銷"
-  },
-  "ExpenseDocumentsInput": {
-    "TooBigToast": {
-      "title": "文件過大",
-      "description": "可以上傳的最大文件大小為 {maxSize}。這份文件大小為 {size}。"
-    },
-    "ErrorToast": {
-      "title": "上傳文件時發生錯誤",
-      "description": "上傳文件時發生錯誤，請再試一次或更換文件。",
-      "retry": "重試"
-    }
   },
   "Balances": {
     "title": "總覽",
