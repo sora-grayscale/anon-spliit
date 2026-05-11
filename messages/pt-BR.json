@@ -150,8 +150,7 @@
         "title": "Recebido para",
         "description": "Selecione para quem a receita foi recebida."
       },
-      "splitModeDescription": "Selecione como dividir a receita.",
-      "attachDescription": "Veja e anexe recibos à receita."
+      "splitModeDescription": "Selecione como dividir a receita."
     },
     "Expense": {
       "create": "Criar despesa",
@@ -176,7 +175,6 @@
         "description": "Selecione para quem a despesa foi paga."
       },
       "splitModeDescription": "Selecione como dividir a despesa.",
-      "attachDescription": "Veja e anexe recibos à despesa.",
       "recurrenceRule": {
         "label": "Recorrência da Despesa",
         "description": "Selecione a frequência de recorrência da despesa.",
@@ -217,7 +215,6 @@
       "yes": "Sim",
       "cancel": "Cancelar"
     },
-    "attachDocuments": "Anexar documentos",
     "create": "Criar",
     "creating": "Criando…",
     "save": "Salvar",
@@ -231,17 +228,6 @@
       "success": "Taxas obtidas:",
       "error": "Opa, não conseguimos obter as taxas mais recentes.",
       "refresh": "Atualizar"
-    }
-  },
-  "ExpenseDocumentsInput": {
-    "TooBigToast": {
-      "title": "O arquivo é muito grande",
-      "description": "O tamanho máximo de arquivo que você pode enviar é {maxSize}. O seu é ${size}."
-    },
-    "ErrorToast": {
-      "title": "Erro ao enviar documento",
-      "description": "Algo deu errado ao enviar o documento. Por favor, tente novamente mais tarde ou selecione um arquivo diferente.",
-      "retry": "Tentar novamente"
     }
   },
   "Balances": {

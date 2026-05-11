@@ -154,8 +154,7 @@
         "title": "Diterima untuk",
         "description": "Pilih untuk siapa pemasukan tersebut diterima."
       },
-      "splitModeDescription": "Pilih cara membagi pemasukan.",
-      "attachDescription": "Lihat dan lampirkan tanda terima pada pemasukan."
+      "splitModeDescription": "Pilih cara membagi pemasukan."
     },
     "Expense": {
       "create": "Buat pengeluaran",
@@ -191,8 +190,7 @@
         "title": "Dibayar oleh",
         "description": "Pilih untuk siapa biaya tersebut dibayarkan."
       },
-      "splitModeDescription": "Pilih cara membagi pengeluaran.",
-      "attachDescription": "Lihat dan lampirkan tanda terima pada pengeluaran."
+      "splitModeDescription": "Pilih cara membagi pengeluaran."
     },
     "amountField": {
       "label": "Jumlah"
@@ -246,7 +244,6 @@
       "yes": "Iya",
       "cancel": "Batalkan"
     },
-    "attachDocuments": "Lampirkan dokumen",
     "create": "Buat",
     "creating": "Membuat…",
     "save": "Simpan",
@@ -265,17 +262,6 @@
     },
     "other": {
       "heading": "Mata uang lainnya"
-    }
-  },
-  "ExpenseDocumentsInput": {
-    "TooBigToast": {
-      "title": "Ukuran file terlalu besar",
-      "description": "Ukuran file maksimum yang dapat Anda unggah adalah {maxSize}. Ukuran file Anda adalah {size}."
-    },
-    "ErrorToast": {
-      "title": "Error saat mengunggah dokumen",
-      "description": "Terjadi kesalahan saat mengunggah dokumen. Silakan coba lagi nanti atau pilih file lain.",
-      "retry": "Ulangi"
     }
   },
   "Balances": {

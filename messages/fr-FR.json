@@ -159,7 +159,6 @@
         "description": "Sélectionnez pour qui le revenu a été reçu."
       },
       "splitModeDescription": "Sélectionnez comment diviser le revenu.",
-      "attachDescription": "Voir et joindre des reçus au revenu.",
       "currencyField": {
         "label": "Devise de la recette",
         "description": "La devise dans laquelle le revenu a été reçu."
@@ -196,7 +195,6 @@
         "description": "Sélectionnez les participants concernés."
       },
       "splitModeDescription": "Sélectionnez comment diviser la dépense.",
-      "attachDescription": "Voir et joindre des reçus à la dépense.",
       "currencyField": {
         "label": "Devise de la dépense",
         "description": "La devise dans laquelle la dépense a été payée."
@@ -233,7 +231,6 @@
       "yes": "Oui",
       "cancel": "Annuler"
     },
-    "attachDocuments": "Joindre des documents",
     "create": "Créer",
     "creating": "Création…",
     "save": "Sauvegarder",
@@ -260,17 +257,6 @@
       "noDate": "Saisissez la date de la dépense pour obtenir un taux de change.",
       "dateMismatch": "Taux de change le {date}",
       "customRate": "Utilisation d’un taux personnalisé"
-    }
-  },
-  "ExpenseDocumentsInput": {
-    "TooBigToast": {
-      "title": "Le fichier est trop grand",
-      "description": "La taille maximale du fichier que vous pouvez télécharger est {maxSize}. La vôtre est {size}."
-    },
-    "ErrorToast": {
-      "title": "Erreur lors du téléchargement du document",
-      "description": "Un problème est survenu lors du téléchargement du document. Veuillez réessayer plus tard ou sélectionner un fichier différent.",
-      "retry": "Réessayer"
     }
   },
   "Balances": {

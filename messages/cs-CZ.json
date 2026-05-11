@@ -142,8 +142,7 @@
         "title": "Obdrženo pro",
         "description": "Vyberte, pro koho byl příjem obdržen."
       },
-      "splitModeDescription": "Vyberte, jak rozdělit příjem.",
-      "attachDescription": "Zobrazit a připojit účtenky k příjmu."
+      "splitModeDescription": "Vyberte, jak rozdělit příjem."
     },
     "Expense": {
       "create": "Vytvořit výdaj",
@@ -174,8 +173,7 @@
         "title": "Zaplaceno pro",
         "description": "Vyberte, pro koho byl výdaj zaplacen."
       },
-      "splitModeDescription": "Vyberte, jak rozdělit výdaj.",
-      "attachDescription": "Zobrazit a připojit účtenky k výdaji."
+      "splitModeDescription": "Vyberte, jak rozdělit výdaj."
     },
     "amountField": {
       "label": "Částka"
@@ -208,24 +206,12 @@
       "yes": "Ano",
       "cancel": "Zrušit"
     },
-    "attachDocuments": "Připojit dokumenty",
     "create": "Vytvořit",
     "creating": "Vytváření…",
     "save": "Uložit",
     "saving": "Ukládání…",
     "cancel": "Zrušit",
     "reimbursement": "Proplacení"
-  },
-  "ExpenseDocumentsInput": {
-    "TooBigToast": {
-      "title": "Soubor je příliš velký",
-      "description": "Maximální velikost souboru, který můžete nahrát, je {maxSize}. Váš má {size}."
-    },
-    "ErrorToast": {
-      "title": "Chyba při nahrávání dokumentu",
-      "description": "Při nahrávání dokumentu došlo k chybě. Zkuste to prosím později nebo vyberte jiný soubor.",
-      "retry": "Zkusit znovu"
-    }
   },
   "Balances": {
     "title": "Zůstatky",

@@ -159,7 +159,6 @@
         "description": "Wähle für wen die Einnahme empfangen wurde."
       },
       "splitModeDescription": "Wähle, wie die Einnahme aufgeteilt werden soll.",
-      "attachDescription": "Füge der Einnahme einen Beleg hinzu.",
       "currencyField": {
         "label": "Währung der Einnahme",
         "description": "Die Währung, in der die Einnahmen erhalten wurden."
@@ -196,7 +195,6 @@
         "description": "Wähle für wen die Ausgabe gezahlt wurde."
       },
       "splitModeDescription": "Wähle, wie die Ausgabe aufgeteilt werden soll.",
-      "attachDescription": "Füge der Ausgabe einen Beleg hinzu.",
       "currencyField": {
         "label": "Währung der Ausgabe",
         "description": "Die Währung, in der die Ausgabe bezahlt wurde."
@@ -233,7 +231,6 @@
       "yes": "Ja",
       "cancel": "Abbrechen"
     },
-    "attachDocuments": "Dokument hinzufügen",
     "create": "Erstellen",
     "creating": "Erstellt…",
     "save": "Speichern",
@@ -260,17 +257,6 @@
       "useCustom": "Benutze individuelle Rate",
       "label": "Wechselkurs",
       "useApi": "Benutze Zinssätze von Frankfurter"
-    }
-  },
-  "ExpenseDocumentsInput": {
-    "TooBigToast": {
-      "title": "Die Datei ist zu groß",
-      "description": "Die maximale Dateigröße ist {maxSize}. Deine ist {size}."
-    },
-    "ErrorToast": {
-      "title": "Fehler beim Hochladen der Datei",
-      "description": "Beim Hochladen der Datei ist etwas schiefgelaufen. Versuche es später nochmal oder wähle eine andere Datei.",
-      "retry": "Wiederholen"
     }
   },
   "Balances": {

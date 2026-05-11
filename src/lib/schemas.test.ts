@@ -20,7 +20,6 @@ function makeBaseExpense(overrides: Record<string, unknown> = {}) {
     splitMode: 'EVENLY',
     saveDefaultSplittingOptions: false,
     isReimbursement: false,
-    documents: [],
     notes: undefined,
     recurrenceRule: 'NONE',
     category: 0,

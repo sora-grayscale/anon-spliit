@@ -165,12 +165,6 @@ describe('encrypt-helpers', () => {
         paidFor: [] as { participant: string; shares: number }[],
         paidBy: '1',
         isReimbursement: false,
-        documents: [] as {
-          id: string
-          url: string
-          width: number
-          height: number
-        }[],
         saveDefaultSplittingOptions: false,
         recurrenceRule: 'NONE' as const,
       }
@@ -209,12 +203,6 @@ describe('encrypt-helpers', () => {
         paidFor: [] as { participant: string; shares: number }[],
         paidBy: '1',
         isReimbursement: false,
-        documents: [] as {
-          id: string
-          url: string
-          width: number
-          height: number
-        }[],
         saveDefaultSplittingOptions: false,
         recurrenceRule: 'NONE' as const,
       }
@@ -270,12 +258,6 @@ describe('encrypt-helpers', () => {
         paidFor: [] as { participant: string; shares: number }[],
         paidBy: '1',
         isReimbursement: false,
-        documents: [] as {
-          id: string
-          url: string
-          width: number
-          height: number
-        }[],
         saveDefaultSplittingOptions: false,
         recurrenceRule: 'NONE' as const,
       }
@@ -316,12 +298,6 @@ describe('encrypt-helpers', () => {
           paidFor: [] as { participant: string; shares: number }[],
           paidBy: '1',
           isReimbursement: false,
-          documents: [] as {
-            id: string
-            url: string
-            width: number
-            height: number
-          }[],
           saveDefaultSplittingOptions: false,
           recurrenceRule: 'NONE' as const,
         }
@@ -353,12 +329,6 @@ describe('encrypt-helpers', () => {
         paidFor: [] as { participant: string; shares: number }[],
         paidBy: '1',
         isReimbursement: false,
-        documents: [] as {
-          id: string
-          url: string
-          width: number
-          height: number
-        }[],
         saveDefaultSplittingOptions: false,
         recurrenceRule: 'NONE' as const,
         originalCurrency: 'EUR',
@@ -396,12 +366,6 @@ describe('encrypt-helpers', () => {
         paidFor: [] as { participant: string; shares: number }[],
         paidBy: '1',
         isReimbursement: false,
-        documents: [] as {
-          id: string
-          url: string
-          width: number
-          height: number
-        }[],
         saveDefaultSplittingOptions: false,
         recurrenceRule: 'NONE' as const,
       }

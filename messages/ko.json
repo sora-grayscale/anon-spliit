@@ -339,16 +339,6 @@
     "yourBalance": "내 잔액:",
     "notInvolved": "당신은 관련이 없어요"
   },
-  "ExpenseDocumentsInput": {
-    "TooBigToast": {
-      "title": "파일이 너무 커요",
-      "description": "업로드 가능한 최대 파일 크기: {maxSize}, 현재 파일 크기: {size}입니다."
-    },
-    "ErrorToast": {
-      "title": "문서 업로드 중 오류가 발생했어요",
-      "description": "문서 업로드 중 오류가 발생했습니다. 나중에 다시 시도하거나 다른 파일을 선택해 주세요."
-    }
-  },
   "Information": {
     "title": "정보",
     "empty": "아직 그룹 정보가 없어요."

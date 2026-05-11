@@ -170,7 +170,6 @@
         "description": "誰のために収入が受け取られたかを選択してください。"
       },
       "splitModeDescription": "収入の分割方法を選択してください。",
-      "attachDescription": "領収書を確認し、収入に添付してください。",
       "currencyField": {
         "label": "収入の通貨",
         "description": "収入が受け取られた通貨。"
@@ -207,7 +206,6 @@
         "description": "誰のために支出が支払われたかを選択してください。"
       },
       "splitModeDescription": "支出の分割方法を選択してください。",
-      "attachDescription": "領収書を確認し、支出に添付してください。",
       "currencyField": {
         "label": "支出の通貨",
         "description": "支出が支払われた通貨。"
@@ -244,7 +242,6 @@
       "yes": "はい",
       "cancel": "キャンセル"
     },
-    "attachDocuments": "書類を添付",
     "create": "作成",
     "creating": "作成中…",
     "save": "保存",
@@ -271,17 +268,6 @@
       "refresh": "更新",
       "customRate": "カスタムレートを使用中",
       "dateMismatch": "適用開始日: {date}"
-    }
-  },
-  "ExpenseDocumentsInput": {
-    "TooBigToast": {
-      "title": "ファイルが大きすぎます",
-      "description": "アップロードできる最大ファイルサイズは{maxSize}です。あなたのファイルは{size}です。"
-    },
-    "ErrorToast": {
-      "title": "書類のアップロード中にエラーが発生しました",
-      "description": "書類のアップロード中に何か問題が発生しました。後で再試行するか、別のファイルを選択してください。",
-      "retry": "再試行"
     }
   },
   "Balances": {

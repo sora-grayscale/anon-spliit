@@ -1,6 +1,5 @@
 import { CategorySelector } from '@/components/category-selector'
 import { CurrencySelector } from '@/components/currency-selector'
-import { ExpenseDocumentsInput } from '@/components/expense-documents-input'
 import { SubmitButton } from '@/components/submit-button'
 import { Button } from '@/components/ui/button'
 import {
@@ -34,9 +33,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Locale } from '@/i18n/request'
-import { randomId } from '@/lib/api'
 import { defaultCurrencyList, getCurrency } from '@/lib/currency'
-import { RuntimeFeatureFlags } from '@/lib/featureFlags'
 import { useActiveUser, useCurrencyRate } from '@/lib/hooks'
 import {
   ExpenseFormValues,
@@ -163,14 +160,12 @@ export function ExpenseForm({
   expense,
   onSubmit,
   onDelete,
-  runtimeFeatureFlags,
 }: {
   group: NonNullable<AppRouterOutput['groups']['get']['group']>
   categories: AppRouterOutput['categories']['list']['categories']
   expense?: AppRouterOutput['groups']['expenses']['get']['expense']
   onSubmit: (value: ExpenseFormValues, participantId?: string) => Promise<void>
   onDelete?: (participantId?: string) => Promise<void>
-  runtimeFeatureFlags: RuntimeFeatureFlags
 }) {
   const t = useTranslations('ExpenseForm')
   const locale = useLocale() as Locale
@@ -217,7 +212,6 @@ export function ExpenseForm({
           splitMode: expense.splitMode,
           saveDefaultSplittingOptions: false,
           isReimbursement: expense.isReimbursement,
-          documents: expense.documents,
           notes: expense.notes ?? '',
           recurrenceRule: expense.recurrenceRule ?? undefined,
         }
@@ -245,7 +239,6 @@ export function ExpenseForm({
             isReimbursement: true,
             splitMode: defaultSplittingOptions.splitMode,
             saveDefaultSplittingOptions: false,
-            documents: [],
             notes: '',
             recurrenceRule: RecurrenceRule.NONE,
           }
@@ -267,16 +260,6 @@ export function ExpenseForm({
             isReimbursement: false,
             splitMode: defaultSplittingOptions.splitMode,
             saveDefaultSplittingOptions: false,
-            documents: searchParams.get('imageUrl')
-              ? [
-                  {
-                    id: randomId(),
-                    url: searchParams.get('imageUrl') as string,
-                    width: Number(searchParams.get('imageWidth')),
-                    height: Number(searchParams.get('imageHeight')),
-                  },
-                ]
-              : [],
             notes: '',
             recurrenceRule: RecurrenceRule.NONE,
           },
@@ -1265,31 +1248,6 @@ export function ExpenseForm({
             </Collapsible>
           </CardContent>
         </Card>
-
-        {runtimeFeatureFlags.enableExpenseDocuments && (
-          <Card className="mt-4">
-            <CardHeader>
-              <CardTitle className="flex justify-between">
-                <span>{t('attachDocuments')}</span>
-              </CardTitle>
-              <CardDescription>
-                {t(`${sExpense}.attachDescription`)}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <FormField
-                control={form.control}
-                name="documents"
-                render={({ field }) => (
-                  <ExpenseDocumentsInput
-                    documents={field.value}
-                    updateDocuments={field.onChange}
-                  />
-                )}
-              />
-            </CardContent>
-          </Card>
-        )}
 
         <div className="flex mt-4 gap-2">
           <SubmitButton loadingContent={t(isCreate ? 'creating' : 'saving')}>

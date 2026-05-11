@@ -151,7 +151,6 @@
         "description": "Seleccione para quién se recibió el ingreso."
       },
       "splitModeDescription": "Seleccione como quieres dividir el ingreso.",
-      "attachDescription": "Ver y adjuntar tickets para el ingreso.",
       "currencyField": {
         "label": "Moneda del ingreso",
         "description": "La moneda en la que se recibieron los ingresos."
@@ -188,7 +187,6 @@
         "description": "Seleccione para quién se pagó el gasto."
       },
       "splitModeDescription": "Seleccione como quieres dividir el gasto.",
-      "attachDescription": "Ver y adjuntar tickets para el gasto.",
       "currencyField": {
         "label": "Moneda del gasto",
         "description": "La moneda en la que se pagó el gasto."
@@ -225,7 +223,6 @@
       "yes": "Si",
       "cancel": "Cancelar"
     },
-    "attachDocuments": "Adjuntar documentos",
     "create": "Crear",
     "creating": "Creando…",
     "save": "Guardar",
@@ -252,17 +249,6 @@
       "dateMismatch": "Tasas para la fecha: {date}",
       "refresh": "Actualizar",
       "customRate": "Utilizando tasa personalizada"
-    }
-  },
-  "ExpenseDocumentsInput": {
-    "TooBigToast": {
-      "title": "El archivo es demasiado grande",
-      "description": "El tamaño máximo de archivo que puede cargar es {maxSize}. El tuyo pesa {size}."
-    },
-    "ErrorToast": {
-      "title": "Error al cargar el documento",
-      "description": "Ha ocurrido un error al cargar el documento. Vuelva a intentarlo más tarde o seleccione otro archivo.",
-      "retry": "Reintentar"
     }
   },
   "Balances": {

@@ -154,8 +154,7 @@
         "title": "Nork jaso du",
         "description": "Hautatu norentzat jaso den diru-sarrera."
       },
-      "splitModeDescription": "Hautatu nola zatitu diru-sarrera.",
-      "attachDescription": "Ordainagiriak ikusi eta diru-sarrerei erantsi."
+      "splitModeDescription": "Hautatu nola zatitu diru-sarrera."
     },
     "Expense": {
       "create": "Sortu gastua",
@@ -191,8 +190,7 @@
         "title": "Honentzat ordaindu da",
         "description": "Hautatu gastua norentzat ordaindu den."
       },
-      "splitModeDescription": "Hautatu nola zatitu gastua.",
-      "attachDescription": "Ikusi eta erantsi gastuaren ordainagiriak."
+      "splitModeDescription": "Hautatu nola zatitu gastua."
     },
     "amountField": {
       "label": "Zenbatekoa"
@@ -246,24 +244,12 @@
       "yes": "Bai",
       "cancel": "Utzi"
     },
-    "attachDocuments": "Erantsi dokumentuak",
     "create": "Sortu",
     "creating": "Sortzen…",
     "save": "Gorde",
     "saving": "Gordetzen…",
     "cancel": "Utzi",
     "reimbursement": "Diru-itzultzea"
-  },
-  "ExpenseDocumentsInput": {
-    "TooBigToast": {
-      "title": "Fitxategia handiegia da",
-      "description": "Igo dezakezun fitxategirik handiena {maxSize} da. Zureak {size} pisatzen du."
-    },
-    "ErrorToast": {
-      "title": "Errorea dokumentua igotzean",
-      "description": "Errore bat gertatu da dokumentua igotzean. Saiatu geroago edo hautatu beste fitxategi bat.",
-      "retry": "Saiatu berriro"
-    }
   },
   "Balances": {
     "title": "Saldoak",

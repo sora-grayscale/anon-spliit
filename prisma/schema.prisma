@@ -70,7 +70,6 @@ model Expense {
   isReimbursement  Boolean           @default(false)
   splitMode        SplitMode         @default(EVENLY)
   createdAt        DateTime          @default(now())
-  documents        ExpenseDocument[]
   notes            String?
 
   recurrenceRule         RecurrenceRule?       @default(NONE)
@@ -81,15 +80,6 @@ model Expense {
   @@index([groupId, expenseDate(sort: Desc)])  // For expense listing by date
   @@index([groupId, createdAt(sort: Desc)])    // For recent expenses query
   @@index([paidById])                          // For participant-specific queries
-}
-
-model ExpenseDocument {
-  id        String   @id
-  url       String
-  width     Int
-  height    Int
-  Expense   Expense? @relation(fields: [expenseId], references: [id])
-  expenseId String?
 }
 
 enum SplitMode {

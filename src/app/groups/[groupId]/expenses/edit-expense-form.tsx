@@ -1,7 +1,6 @@
 'use client'
 import { useEncryption } from '@/components/encryption-provider'
 import { decryptExpense, encryptExpenseFormValues } from '@/lib/encrypt-helpers'
-import { RuntimeFeatureFlags } from '@/lib/featureFlags'
 import { trpc } from '@/trpc/client'
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
@@ -11,11 +10,9 @@ import { ExpenseForm } from './expense-form'
 export function EditExpenseForm({
   groupId,
   expenseId,
-  runtimeFeatureFlags,
 }: {
   groupId: string
   expenseId: string
-  runtimeFeatureFlags: RuntimeFeatureFlags
 }) {
   // Use decrypted group data from context
   const { group } = useCurrentGroup()
@@ -130,7 +127,6 @@ export function EditExpenseForm({
         utils.groups.expenses.invalidate()
         router.push(`/groups/${group.id}`)
       }}
-      runtimeFeatureFlags={runtimeFeatureFlags}
     />
   )
 }
