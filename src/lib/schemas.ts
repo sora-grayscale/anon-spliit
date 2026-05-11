@@ -60,9 +60,28 @@ const encryptableNumber = z.union([
   z.string(), // Encrypted string or numeric string
 ])
 
+// expenseDate bounds to prevent abuse via recurring expense generation (Issue #133)
+// - Past: 5 years from now (generous enough for tax-year retro entries)
+// - Future: 1 year from now (allows annual recurring scheduling)
+export const EXPENSE_DATE_MIN_YEARS_PAST = 5
+export const EXPENSE_DATE_MAX_YEARS_FUTURE = 1
+const MS_PER_YEAR = 365 * 24 * 60 * 60 * 1000
+
 export const expenseFormSchema = z
   .object({
-    expenseDate: z.coerce.date(),
+    expenseDate: z.coerce
+      .date()
+      .refine(
+        (d) =>
+          d.getTime() >= Date.now() - EXPENSE_DATE_MIN_YEARS_PAST * MS_PER_YEAR,
+        'expenseDateTooOld',
+      )
+      .refine(
+        (d) =>
+          d.getTime() <=
+          Date.now() + EXPENSE_DATE_MAX_YEARS_FUTURE * MS_PER_YEAR,
+        'expenseDateTooFuture',
+      ),
     title: z.string({ required_error: 'titleRequired' }).min(2, 'min2'),
     // Category can be number (form input) or encrypted string (Issue #19 - E2EE)
     category: z.union([z.number(), z.string()]).default(0),
