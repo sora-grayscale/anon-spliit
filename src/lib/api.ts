@@ -553,6 +553,10 @@ export async function logActivity(
 }
 
 const MAX_RETRY_COUNT = 3
+// Maximum recurring expenses to generate per link per single invocation (Issue #133)
+// Prevents DoS via past-dated recurring expenses with frequent rules (e.g. DAILY).
+// Subsequent invocations will continue processing where this run left off.
+export const MAX_GENERATIONS_PER_RUN = 100
 
 async function createRecurringExpenses() {
   const localDate = new Date() // Current local date
@@ -596,8 +600,19 @@ async function createRecurringExpenses() {
 
     let currentExpenseRecord = recurringExpenseLink.currentFrameExpense
     let currentReccuringExpenseLinkId = recurringExpenseLink.id
+    let generationsForThisLink = 0
 
     while (newExpenseDate < utcDateFromLocal) {
+      // Cap per-link generation to prevent runaway expense creation (Issue #133)
+      if (generationsForThisLink >= MAX_GENERATIONS_PER_RUN) {
+        console.warn(
+          'Reached MAX_GENERATIONS_PER_RUN (%d) for recurringExpenseLink %s; deferring remaining generations',
+          MAX_GENERATIONS_PER_RUN,
+          currentReccuringExpenseLinkId,
+        )
+        break
+      }
+
       const newExpenseId = randomId()
       const newRecurringExpenseLinkId = randomId()
 
@@ -709,6 +724,7 @@ async function createRecurringExpenses() {
       currentExpenseRecord = newExpense
       currentReccuringExpenseLinkId = newRecurringExpenseLinkId
       newExpenseDate = newRecurringExpenseNextExpenseDate
+      generationsForThisLink++
     }
   }
 }
