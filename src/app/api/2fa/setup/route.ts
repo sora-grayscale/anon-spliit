@@ -6,6 +6,7 @@
  */
 
 import { auth } from '@/lib/auth'
+import { passwordChangeRequiredResponse } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import {
   encryptBackupCodes,
@@ -24,6 +25,9 @@ export async function POST() {
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    const pwChangeResp = passwordChangeRequiredResponse(session)
+    if (pwChangeResp) return pwChangeResp
 
     const userId = session.user.id
     const isAdmin = session.user.isAdmin

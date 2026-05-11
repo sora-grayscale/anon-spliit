@@ -3,6 +3,7 @@
  */
 
 import { auth, isPrivateInstance } from '@/lib/auth'
+import { passwordChangeRequiredResponse } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { randomBytes } from 'crypto'
@@ -31,6 +32,9 @@ export async function POST(request: Request) {
     if (!session?.user?.isAdmin) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    const pwChangeResp = passwordChangeRequiredResponse(session)
+    if (pwChangeResp) return pwChangeResp
 
     const body = (await request.json()) as { email?: string; name?: string }
     const { email, name } = body
@@ -121,6 +125,9 @@ export async function GET() {
     if (!session?.user?.isAdmin) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    const pwChangeResp = passwordChangeRequiredResponse(session)
+    if (pwChangeResp) return pwChangeResp
 
     const users = await prisma.whitelistUser.findMany({
       select: {
