@@ -265,31 +265,6 @@
       "retry": "Reintentar"
     }
   },
-  "CreateFromReceipt": {
-    "Dialog": {
-      "triggerTitle": "Crear gasto desde ticket",
-      "title": "Crear desde ticket",
-      "description": "Extraer la información de gastos de una foto de recibo.",
-      "body": "Sube la foto de un recibo y lo escanearemos para extraer la información del gasto si podemos.",
-      "selectImage": "Seleccionar imagen…",
-      "titleLabel": "Titulo:",
-      "categoryLabel": "Categoria:",
-      "amountLabel": "Cantidad:",
-      "dateLabel": "Fecha:",
-      "editNext": "A continuación podrá editar la información de los gastos.",
-      "continue": "Continuar"
-    },
-    "unknown": "Desconocido",
-    "TooBigToast": {
-      "title": "El archivo es demasiado grande",
-      "description": "El tamaño máximo de archivo que puede cargar es {maxSize}. El tuyo pesa {size}."
-    },
-    "ErrorToast": {
-      "title": "Error al cargar el documento",
-      "description": "Ha ocurrido un error al cargar el documento. Vuelva a intentarlo más tarde o seleccione otro archivo.",
-      "retry": "Reintentar"
-    }
-  },
   "Balances": {
     "title": "Balances",
     "description": "Se trata del importe que ha pagado o ha recibido cada participante.",

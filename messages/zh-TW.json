@@ -218,31 +218,6 @@
       "retry": "重試"
     }
   },
-  "CreateFromReceipt": {
-    "Dialog": {
-      "triggerTitle": "從收據中新增消費紀錄",
-      "title": "從收據中新增消費紀錄",
-      "description": "從收據照片上抓取消費明細。",
-      "body": "上傳收據的圖片，我們會試圖解析其中的支出",
-      "selectImage": "選擇圖片……",
-      "titleLabel": "標題：",
-      "categoryLabel": "類別：",
-      "amountLabel": "金額：",
-      "dateLabel": "日期：",
-      "editNext": "可於後續編輯消費明細。",
-      "continue": "繼續"
-    },
-    "unknown": "未知",
-    "TooBigToast": {
-      "title": "文件過大",
-      "description": "可以上傳的最大文件大小為 {maxSize}。這份文件大小為 {size}。"
-    },
-    "ErrorToast": {
-      "title": "上傳文件時發生錯誤",
-      "description": "上傳文件時發生錯誤，請再試一次或更換文件。",
-      "retry": "重試"
-    }
-  },
   "Balances": {
     "title": "總覽",
     "description": "這是每個成員已支付及需支付的金額",

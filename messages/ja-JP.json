@@ -284,31 +284,6 @@
       "retry": "再試行"
     }
   },
-  "CreateFromReceipt": {
-    "Dialog": {
-      "triggerTitle": "領収書から支出を作成",
-      "title": "領収書から作成",
-      "description": "領収書の写真から支出情報を抽出します。",
-      "body": "領収書の写真をアップロードすると、可能であれば支出情報を抽出してスキャンします。",
-      "selectImage": "画像を選択…",
-      "titleLabel": "タイトル:",
-      "categoryLabel": "カテゴリー:",
-      "amountLabel": "金額:",
-      "dateLabel": "日付:",
-      "editNext": "次に支出情報を編集できます。",
-      "continue": "続ける"
-    },
-    "unknown": "不明",
-    "TooBigToast": {
-      "title": "ファイルが大きすぎます",
-      "description": "アップロードできる最大ファイルサイズは{maxSize}です。あなたのファイルは{size}です。"
-    },
-    "ErrorToast": {
-      "title": "書類のアップロード中にエラーが発生しました",
-      "description": "書類のアップロード中に何か問題が発生しました。後で再試行するか、別のファイルを選択してください。",
-      "retry": "再試行"
-    }
-  },
   "Balances": {
     "title": "残高",
     "description": "これは各参加者が支払ったまたは支払われた金額です。",

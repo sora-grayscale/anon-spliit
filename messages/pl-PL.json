@@ -227,31 +227,6 @@
       "retry": "Ponów"
     }
   },
-  "CreateFromReceipt": {
-    "Dialog": {
-      "triggerTitle": "Utwórz wydatek z paragonu",
-      "title": "Utwórz z paragonu",
-      "description": "Wyodrębnij informacje o wydatkach ze zdjęcia paragonu.",
-      "body": "Prześlij zdjęcie paragonu, a my zeskanujemy je, aby wyodrębnić informacje o wydatkach, jeśli to możliwe.",
-      "selectImage": "Wybierz obraz…",
-      "titleLabel": "Tytuł:",
-      "categoryLabel": "Kategoria:",
-      "amountLabel": "Suma:",
-      "dateLabel": "Data:",
-      "editNext": "Następnie będziesz mógł edytować informacje o wydatkach.",
-      "continue": "Kontynuuj"
-    },
-    "unknown": "Nieznany",
-    "TooBigToast": {
-      "title": "Ten plik jest zbyt duży",
-      "description": "Maksymalny rozmiar pliku to {maxSize}. Twój plik ma {size}."
-    },
-    "ErrorToast": {
-      "title": "Błąd podczas wysyłania dokumentu",
-      "description": "Coś poszło nie tak podczas wysyłania dokumentu. Proszę spróbuj ponownie później, albo wybierz inny plik.",
-      "retry": "Ponów"
-    }
-  },
   "Balances": {
     "title": "Salda",
     "description": "Jest to kwota, którą każdy członek zapłacił lub otrzymał.",

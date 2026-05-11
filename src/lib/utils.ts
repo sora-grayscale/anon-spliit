@@ -1,4 +1,4 @@
-import { Category, Group } from '@prisma/client'
+import { Group } from '@prisma/client'
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 import { Currency, getCurrency } from './currency'
@@ -50,10 +50,6 @@ export function formatDateOnly(
   return localDate.toLocaleString(locale, {
     ...options,
   })
-}
-
-export function formatCategoryForAIPrompt(category: Category) {
-  return `"${category.grouping}/${category.name}" (ID: ${category.id})`
 }
 
 /**

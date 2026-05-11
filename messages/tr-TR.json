@@ -218,31 +218,6 @@
       "retry": "Tekrar dene"
     }
   },
-  "CreateFromReceipt": {
-    "Dialog": {
-      "triggerTitle": "Makbuzdan masraf oluştur",
-      "title": "Makbuzdan oluştur",
-      "description": "Bir makbuz fotoğrafındaki masraf bilgilerini çekin.",
-      "body": "Bir makbuz fotoğrafı yükleyin, mümkünse masraf bilgilerini otomatik olarak çıkaracağız.",
-      "selectImage": "Resim seç…",
-      "titleLabel": "Başlık:",
-      "categoryLabel": "Kategori:",
-      "amountLabel": "Tutar:",
-      "dateLabel": "Tarih:",
-      "editNext": "Masraf bilgilerini sonraki adımda düzenleyebileceksiniz.",
-      "continue": "Devam et"
-    },
-    "unknown": "Bilinmiyor",
-    "TooBigToast": {
-      "title": "Dosya çok büyük",
-      "description": "Yükleyebileceğiniz maksimum dosya boyutu {maxSize}. Dosyanız {size} boyutunda."
-    },
-    "ErrorToast": {
-      "title": "Belge yüklenirken hata oluştu",
-      "description": "Belge yüklenirken bir sorun oluştu. Lütfen daha sonra tekrar deneyin veya farklı bir dosya seçin.",
-      "retry": "Tekrar dene"
-    }
-  },
   "Balances": {
     "title": "Bakiyeler",
     "description": "Her katılımcının ödediği veya kendisi için ödenen tutar burada gösterilir.",

@@ -265,31 +265,6 @@
       "retry": "Saiatu berriro"
     }
   },
-  "CreateFromReceipt": {
-    "Dialog": {
-      "triggerTitle": "Sortu gastua ordainagiri batetik",
-      "title": "Sortu ordainagiritik",
-      "description": "Erauzi gastuaren informazioa ordainagiriren argazkitik.",
-      "body": "Igo ordainagiri baten argazkia eta eskaneatuko dugu gastuaren informazioa erauzteko, ahal badugu.",
-      "selectImage": "Hautatu irudia…",
-      "titleLabel": "Titulua:",
-      "categoryLabel": "Kategoria:",
-      "amountLabel": "Zenbatekoa:",
-      "dateLabel": "Data:",
-      "editNext": "Ondoren, gastuaren informazioa editatzeko aukera izango duzu.",
-      "continue": "Jarraitu"
-    },
-    "unknown": "Ezezaguna",
-    "TooBigToast": {
-      "title": "Fitxategia handiegia da",
-      "description": "Igo dezakezun fitxategiaren gehienezko tamaina {maxSize} da. Zureak {size} pisatzen du."
-    },
-    "ErrorToast": {
-      "title": "Errorea dokumentua igotzean",
-      "description": "Dokumentua igotzean errore bat gertatu da. Saiatu berriro beranduago edo hautatu beste fitxategi bat.",
-      "retry": "Saiatu berriro"
-    }
-  },
   "Balances": {
     "title": "Saldoak",
     "description": "Hau da kide bakoitzak ordaindu edo jaso duen zenbatekoa.",

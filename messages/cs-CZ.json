@@ -227,31 +227,6 @@
       "retry": "Zkusit znovu"
     }
   },
-  "CreateFromReceipt": {
-    "Dialog": {
-      "triggerTitle": "Vytvořit výdaj z účtenky",
-      "title": "Vytvořit z účtenky",
-      "description": "Získat informace o výdaji z fotografie účtenky.",
-      "body": "Nahrajte fotografii účtenky a my se pokusíme z ní získat informace o výdaji.",
-      "selectImage": "Vybrat obrázek…",
-      "titleLabel": "Název:",
-      "categoryLabel": "Kategorie:",
-      "amountLabel": "Částka:",
-      "dateLabel": "Datum:",
-      "editNext": "Informace o výdaji budete moci upravit v dalším kroku.",
-      "continue": "Pokračovat"
-    },
-    "unknown": "Neznámé",
-    "TooBigToast": {
-      "title": "Soubor je příliš velký",
-      "description": "Maximální velikost souboru, který můžete nahrát, je {maxSize}. Váš má {size}."
-    },
-    "ErrorToast": {
-      "title": "Chyba při nahrávání dokumentu",
-      "description": "Při nahrávání dokumentu došlo k chybě. Zkuste to prosím později nebo vyberte jiný soubor.",
-      "retry": "Zkusit znovu"
-    }
-  },
   "Balances": {
     "title": "Zůstatky",
     "description": "Toto je částka, kterou každý účastník zaplatil nebo za kterou bylo zaplaceno.",

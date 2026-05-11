@@ -273,31 +273,6 @@
       "retry": "Réessayer"
     }
   },
-  "CreateFromReceipt": {
-    "Dialog": {
-      "triggerTitle": "Créer une dépense à partir du reçu",
-      "title": "Créer à partir du reçu",
-      "description": "Extraire les informations de la dépense à partir d'une photo de reçu.",
-      "body": "Téléchargez la photo d'un reçu, et nous l'analyserons pour extraire les informations de la dépense si possible.",
-      "selectImage": "Sélectionner une image…",
-      "titleLabel": "Titre :",
-      "categoryLabel": "Catégorie :",
-      "amountLabel": "Montant :",
-      "dateLabel": "Date :",
-      "editNext": "Vous pourrez modifier les informations de la dépense ensuite.",
-      "continue": "Continuer"
-    },
-    "unknown": "Inconnu",
-    "TooBigToast": {
-      "title": "Le fichier est trop grand",
-      "description": "La taille maximale du fichier que vous pouvez télécharger est {maxSize}. La vôtre est {size}."
-    },
-    "ErrorToast": {
-      "title": "Erreur lors du téléchargement du document",
-      "description": "Un problème est survenu lors du téléchargement du document. Veuillez réessayer plus tard ou sélectionner un fichier différent.",
-      "retry": "Réessayer"
-    }
-  },
   "Balances": {
     "title": "Équilibres",
     "description": "Voici le montant que chaque participant a payé ou doit rembourser.",

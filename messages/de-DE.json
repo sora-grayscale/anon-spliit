@@ -273,31 +273,6 @@
       "retry": "Wiederholen"
     }
   },
-  "CreateFromReceipt": {
-    "Dialog": {
-      "triggerTitle": "Ausgabe von Rechnungsbeleg erstellen",
-      "title": "Von Rechnungsbeleg erstellen",
-      "description": "Ausgabeninformationen von einem Foto einer Rechnung lesen.",
-      "body": "Lade ein Foto der Rechnung hoch und wir versuchen die Ausgabeinformationen zu extrahieren.",
-      "selectImage": "Bild wählen…",
-      "titleLabel": "Titel:",
-      "categoryLabel": "Kategorie:",
-      "amountLabel": "Betrag:",
-      "dateLabel": "Datum:",
-      "editNext": "Als nächstes kannst du die Informationen zur Ausgabe editieren.",
-      "continue": "Weiter"
-    },
-    "unknown": "Unbekannt",
-    "TooBigToast": {
-      "title": "Die Datei ist zu groß",
-      "description": "Die maximale Dateigröße ist {maxSize}. Deine ist {size}."
-    },
-    "ErrorToast": {
-      "title": "Fehler beim Hochladen der Datei",
-      "description": "Beim Hochladen der Datei ist etwas schiefgelaufen. Versuche es später nochmal oder wähle eine andere Datei.",
-      "retry": "Wiederholen"
-    }
-  },
   "Balances": {
     "title": "Bilanz",
     "description": "Das sind die Beträge, die jedes Mitglied bezahlt oder empfangen hat.",

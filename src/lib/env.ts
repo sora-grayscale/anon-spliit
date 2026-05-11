@@ -70,15 +70,6 @@ const envSchema = z
       emptyStringToUndefined,
       z.string().optional(),
     ),
-    NEXT_PUBLIC_ENABLE_RECEIPT_EXTRACT: z.preprocess(
-      interpretEnvVarAsBool,
-      z.boolean().default(false),
-    ),
-    NEXT_PUBLIC_ENABLE_CATEGORY_EXTRACT: z.preprocess(
-      interpretEnvVarAsBool,
-      z.boolean().default(false),
-    ),
-    OPENAI_API_KEY: z.preprocess(emptyStringToUndefined, z.string().optional()),
     // Two-Factor Authentication (2FA)
     TWO_FA_ENCRYPTION_KEY: z.preprocess(
       emptyStringToUndefined,
@@ -112,17 +103,6 @@ const envSchema = z
         code: ZodIssueCode.custom,
         message:
           'If NEXT_PUBLIC_ENABLE_EXPENSE_DOCUMENTS is specified, then S3_* must be specified too',
-      })
-    }
-    if (
-      (env.NEXT_PUBLIC_ENABLE_RECEIPT_EXTRACT ||
-        env.NEXT_PUBLIC_ENABLE_CATEGORY_EXTRACT) &&
-      !env.OPENAI_API_KEY
-    ) {
-      ctx.addIssue({
-        code: ZodIssueCode.custom,
-        message:
-          'If NEXT_PUBLIC_ENABLE_RECEIPT_EXTRACT or NEXT_PUBLIC_ENABLE_CATEGORY_EXTRACT is specified, then OPENAI_API_KEY must be specified too',
       })
     }
     // NEXTAUTH_SECRET is required for Private Instance Mode

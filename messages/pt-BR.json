@@ -244,31 +244,6 @@
       "retry": "Tentar novamente"
     }
   },
-  "CreateFromReceipt": {
-    "Dialog": {
-      "triggerTitle": "Criar despesa a partir de recibo",
-      "title": "Criar a partir de recibo",
-      "description": "Extraia as informações da despesa a partir de uma foto de recibo.",
-      "body": "Faça upload da foto de um recibo, e vamos escaneá-la para extrair as informações da despesa, se possível.",
-      "selectImage": "Selecionar imagem…",
-      "titleLabel": "Título:",
-      "categoryLabel": "Categoria:",
-      "amountLabel": "Valor:",
-      "dateLabel": "Data:",
-      "editNext": "Você poderá editar as informações da despesa a seguir.",
-      "continue": "Continuar"
-    },
-    "unknown": "Desconhecido",
-    "TooBigToast": {
-      "title": "O arquivo é muito grande",
-      "description": "O tamanho máximo de arquivo que você pode enviar é {maxSize}. O seu é ${size}."
-    },
-    "ErrorToast": {
-      "title": "Erro ao enviar documento",
-      "description": "Algo deu errado ao enviar o documento. Por favor, tente novamente mais tarde ou selecione um arquivo diferente.",
-      "retry": "Tentar novamente"
-    }
-  },
   "Balances": {
     "title": "Saldos",
     "description": "Este é o valor que cada participante pagou ou recebeu.",

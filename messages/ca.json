@@ -273,31 +273,6 @@
       "retry": "Tornar-ho a intentar"
     }
   },
-  "CreateFromReceipt": {
-    "Dialog": {
-      "triggerTitle": "Crear una despesa des d'un tiquet",
-      "title": "Crear des del tiquet",
-      "description": "Extreure la informació de despeses de la foto d'un tiquet.",
-      "body": "Puja la foto d'un tiquet i l'escanejarem per extreure'n, si podem, la informaició de la despesa.",
-      "selectImage": "Seleccionar la imatge…",
-      "titleLabel": "Títol:",
-      "categoryLabel": "Categoria:",
-      "amountLabel": "Quantitat:",
-      "dateLabel": "Data:",
-      "editNext": "A continuació, podràs editar la informació de les despeses.",
-      "continue": "Continuar"
-    },
-    "unknown": "Desconegut",
-    "TooBigToast": {
-      "title": "L'arxiu és massa gran",
-      "description": "La mida màxima que pot tenir l'arxiu és de {maxSize}. El teu pesa {size}."
-    },
-    "ErrorToast": {
-      "title": "Error al carregar el document",
-      "description": "Hi ha hagut un error al carregar el document. Torna a intentar-ho més tard o selecciona un altre arxiu.",
-      "retry": "Tornar-ho a intentar"
-    }
-  },
   "Balances": {
     "title": "Balanç",
     "description": "L'import total que ha pagat o rebut cada participant.",
