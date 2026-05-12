@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="public/banner.png" alt="anon-spliit" width="600" />
+  <img src="public/anon-spliit.png" alt="anon-spliit" width="300" />
 </p>
 
 <h1 align="center">anon spliit</h1>
