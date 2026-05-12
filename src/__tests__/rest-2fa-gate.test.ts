@@ -62,9 +62,14 @@ jest.mock('@/lib/two-factor', () => ({
 }))
 
 jest.mock('@/lib/rate-limit', () => ({
+  // Sync API still exported (kept for back-compat, deprecated in #167).
   checkRateLimit: jest.fn(() => ({ isLimited: false })),
   recordFailedAttempt: jest.fn(),
   clearAttempts: jest.fn(),
+  // Async API — used by all callers in this repo after #167.
+  checkRateLimitAsync: jest.fn(() => Promise.resolve({ isLimited: false })),
+  recordFailedAttemptAsync: jest.fn(() => Promise.resolve()),
+  clearAttemptsAsync: jest.fn(() => Promise.resolve()),
 }))
 
 jest.mock('bcryptjs', () => ({

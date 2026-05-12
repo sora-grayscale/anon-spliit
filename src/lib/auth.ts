@@ -4,9 +4,9 @@
 
 import { prisma } from '@/lib/prisma'
 import {
-  checkRateLimit,
-  clearAttempts,
-  recordFailedAttempt,
+  checkRateLimitAsync,
+  clearAttemptsAsync,
+  recordFailedAttemptAsync,
 } from '@/lib/rate-limit'
 import { isJwtValidForUser } from '@/lib/session-validation'
 import { PrismaAdapter } from '@auth/prisma-adapter'
@@ -56,8 +56,10 @@ const authConfig: NextAuthConfig = {
         const email = credentials.email as string
         const password = credentials.password as string
 
-        // Check rate limit before attempting authentication
-        const rateLimit = checkRateLimit(email)
+        // Check rate limit before attempting authentication.
+        // Use the async API so database storage (Issue #167) is respected;
+        // the sync entry point silently bypasses non-memory backends.
+        const rateLimit = await checkRateLimitAsync(email)
         if (rateLimit.isLimited) {
           console.warn(
             `Rate limited login attempt for ${email}. Retry after ${rateLimit.retryAfter}s`,
@@ -77,7 +79,7 @@ const authConfig: NextAuthConfig = {
           const isValidPassword = await bcrypt.compare(password, admin.password)
           if (isValidPassword) {
             // Clear rate limit on successful login
-            clearAttempts(email)
+            await clearAttemptsAsync(email)
             // Check if 2FA is enabled for this user
             const twoFactorEnabled = admin.twoFactorEnabled ?? false
             return {
@@ -97,7 +99,7 @@ const authConfig: NextAuthConfig = {
           )
           if (isValidPassword) {
             // Clear rate limit on successful login
-            clearAttempts(email)
+            await clearAttemptsAsync(email)
             // Check if 2FA is enabled for this user
             const twoFactorEnabled = whitelistUser.twoFactorEnabled ?? false
             return {
@@ -116,7 +118,7 @@ const authConfig: NextAuthConfig = {
         }
 
         // Record failed attempt for rate limiting
-        recordFailedAttempt(email)
+        await recordFailedAttemptAsync(email)
         return null
       },
     }),

@@ -273,7 +273,16 @@ function getStorageSync(): RateLimitStorage {
 // ============================================================
 
 /**
- * Check if an email is rate limited
+ * Check if an email is rate limited (synchronous, memory-only).
+ *
+ * @deprecated Use `checkRateLimitAsync` instead. When
+ * `RATE_LIMIT_STORAGE=database` (or `auto` resolving to database) this
+ * function unconditionally returns `{ isLimited: false }` and therefore
+ * bypasses rate limiting entirely (Issue #167). It remains exported for
+ * backward compatibility with callers that only run in single-instance,
+ * memory-storage deployments. All callers inside this repo were migrated
+ * to the async API in #167.
+ *
  * @returns Object with isLimited flag and optional retryAfter (seconds)
  */
 export function checkRateLimit(email: string): {
@@ -401,8 +410,13 @@ export async function checkRateLimitAsync(email: string): Promise<{
 }
 
 /**
- * Record a failed login attempt
- * Uses sync memory storage for immediate effect when available
+ * Record a failed login attempt (synchronous, memory-only).
+ *
+ * @deprecated Use `recordFailedAttemptAsync` instead. For non-memory
+ * storage backends this function fires `recordFailedAttemptAsync` as a
+ * fire-and-forget promise, so the increment is racy and may not be
+ * observed by the next `checkRateLimit` call (Issue #167). All callers
+ * inside this repo were migrated to the async API in #167.
  */
 export function recordFailedAttempt(email: string): void {
   const key = email.toLowerCase()
@@ -460,8 +474,12 @@ export async function recordFailedAttemptAsync(email: string): Promise<void> {
 }
 
 /**
- * Clear attempts on successful login
- * Uses sync memory storage for immediate effect when available
+ * Clear attempts on successful login (synchronous, memory-only).
+ *
+ * @deprecated Use `clearAttemptsAsync` instead. For non-memory storage
+ * backends this function fires `clearAttemptsAsync` as a fire-and-forget
+ * promise, so the reset is racy (Issue #167). All callers inside this
+ * repo were migrated to the async API in #167.
  */
 export function clearAttempts(email: string): void {
   const key = email.toLowerCase()

@@ -11,9 +11,9 @@ import {
 } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import {
-  checkRateLimit,
-  clearAttempts,
-  recordFailedAttempt,
+  checkRateLimitAsync,
+  clearAttemptsAsync,
+  recordFailedAttemptAsync,
 } from '@/lib/rate-limit'
 import { decryptSecret, verifyTOTP } from '@/lib/two-factor'
 import { NextResponse } from 'next/server'
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
 
     // Check rate limit (5 attempts per 15 minutes per user)
     const rateLimitKey = `${RATE_LIMIT_PREFIX}${userId}`
-    const rateLimitResult = checkRateLimit(rateLimitKey)
+    const rateLimitResult = await checkRateLimitAsync(rateLimitKey)
 
     if (rateLimitResult.isLimited) {
       return NextResponse.json(
@@ -125,7 +125,7 @@ export async function POST(request: Request) {
     const isValidToken = verifyTOTP(decryptedSecret, token)
 
     if (!isValidToken) {
-      recordFailedAttempt(rateLimitKey)
+      await recordFailedAttemptAsync(rateLimitKey)
       return NextResponse.json(
         { error: 'Invalid token. Please try again.' },
         { status: 400 },
@@ -133,7 +133,7 @@ export async function POST(request: Request) {
     }
 
     // Clear rate limit attempts on successful verification
-    clearAttempts(rateLimitKey)
+    await clearAttemptsAsync(rateLimitKey)
 
     // 5. If valid, set twoFactorEnabled=true and record the verification time
     // so the jwt callback's 5-minute window treats this setup as the latest

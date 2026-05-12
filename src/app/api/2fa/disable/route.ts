@@ -12,9 +12,9 @@ import {
 } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import {
-  checkRateLimit,
-  clearAttempts,
-  recordFailedAttempt,
+  checkRateLimitAsync,
+  clearAttemptsAsync,
+  recordFailedAttemptAsync,
 } from '@/lib/rate-limit'
 import {
   decryptBackupCodes,
@@ -48,7 +48,7 @@ export async function POST(request: Request) {
 
     // Check rate limit (5 attempts per 15 minutes per user)
     const rateLimitKey = `${RATE_LIMIT_PREFIX}${userId}`
-    const rateLimitResult = checkRateLimit(rateLimitKey)
+    const rateLimitResult = await checkRateLimitAsync(rateLimitKey)
 
     if (rateLimitResult.isLimited) {
       return NextResponse.json(
@@ -134,7 +134,7 @@ export async function POST(request: Request) {
     // 3. Verify the password matches user's password
     const isValidPassword = await bcrypt.compare(password, userPassword)
     if (!isValidPassword) {
-      recordFailedAttempt(rateLimitKey)
+      await recordFailedAttemptAsync(rateLimitKey)
       return NextResponse.json(
         { error: 'Password is incorrect' },
         { status: 400 },
@@ -193,7 +193,7 @@ export async function POST(request: Request) {
     }
 
     if (!isValidToken) {
-      recordFailedAttempt(rateLimitKey)
+      await recordFailedAttemptAsync(rateLimitKey)
       return NextResponse.json(
         { error: 'Invalid token or backup code' },
         { status: 400 },
@@ -201,7 +201,7 @@ export async function POST(request: Request) {
     }
 
     // Clear rate limit attempts on successful verification
-    clearAttempts(rateLimitKey)
+    await clearAttemptsAsync(rateLimitKey)
 
     // 5. If verified, set twoFactorEnabled=false, twoFactorSecret=null, twoFactorBackupCodes=null
     if (isAdmin) {

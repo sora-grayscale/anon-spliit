@@ -8,9 +8,9 @@
 
 import { prisma } from '@/lib/prisma'
 import {
-  checkRateLimit,
-  clearAttempts,
-  recordFailedAttempt,
+  checkRateLimitAsync,
+  clearAttemptsAsync,
+  recordFailedAttemptAsync,
 } from '@/lib/rate-limit'
 import {
   decryptBackupCodes,
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
 
     // Check rate limit before processing (5 attempts per minute per email)
     const rateLimitKey = `${RATE_LIMIT_PREFIX}${email}`
-    const rateLimitResult = checkRateLimit(rateLimitKey)
+    const rateLimitResult = await checkRateLimitAsync(rateLimitKey)
 
     if (rateLimitResult.isLimited) {
       return NextResponse.json(
@@ -184,12 +184,12 @@ export async function POST(request: Request) {
 
     if (!verified) {
       // Record failed attempt for rate limiting
-      recordFailedAttempt(rateLimitKey)
+      await recordFailedAttemptAsync(rateLimitKey)
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
 
     // Clear rate limit attempts on successful verification
-    clearAttempts(rateLimitKey)
+    await clearAttemptsAsync(rateLimitKey)
 
     // Record server-side 2FA verification timestamp (Issue #123)
     // This prevents client-side bypass of twoFactorVerified flag

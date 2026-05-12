@@ -8,9 +8,9 @@ import { auth } from '@/lib/auth'
 import { requiresTwoFactorResponse } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import {
-  checkRateLimit,
-  clearAttempts,
-  recordFailedAttempt,
+  checkRateLimitAsync,
+  clearAttemptsAsync,
+  recordFailedAttemptAsync,
 } from '@/lib/rate-limit'
 import bcrypt from 'bcryptjs'
 import { NextResponse } from 'next/server'
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
 
     // Check rate limit before processing (Issue #43)
     const rateLimitKey = `${RATE_LIMIT_PREFIX}${session.user.email}`
-    const rateLimitResult = checkRateLimit(rateLimitKey)
+    const rateLimitResult = await checkRateLimitAsync(rateLimitKey)
 
     if (rateLimitResult.isLimited) {
       return NextResponse.json(
@@ -105,7 +105,7 @@ export async function POST(request: Request) {
     const isValidPassword = await bcrypt.compare(currentPassword, userPassword)
     if (!isValidPassword) {
       // Record failed attempt for rate limiting (Issue #43)
-      recordFailedAttempt(rateLimitKey)
+      await recordFailedAttemptAsync(rateLimitKey)
       return NextResponse.json(
         { error: 'Current password is incorrect' },
         { status: 400 },
@@ -139,7 +139,7 @@ export async function POST(request: Request) {
     }
 
     // Clear rate limit attempts on successful password change (Issue #43)
-    clearAttempts(rateLimitKey)
+    await clearAttemptsAsync(rateLimitKey)
 
     return NextResponse.json({ success: true })
   } catch (error) {
