@@ -390,18 +390,18 @@ describe('API data access layer', () => {
       )
     })
 
-    it('should support filter option', async () => {
+    it('should not apply any server-side title filter (Issue #164)', async () => {
+      // Server-side filter on `title` was removed because the column stores
+      // E2EE ciphertext; SQL LIKE/ILIKE on it cannot match user input and
+      // leaks the plaintext search term to server logs.
       ;(mockRecurringExpenseLink.findMany as jest.Mock).mockResolvedValue([])
       ;(mockExpense.findMany as jest.Mock).mockResolvedValue([])
 
-      await getGroupExpenses('group-1', { filter: 'dinner' })
+      await getGroupExpenses('group-1')
 
       expect(mockExpense.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: {
-            groupId: 'group-1',
-            title: { contains: 'dinner', mode: 'insensitive' },
-          },
+          where: { groupId: 'group-1' },
         }),
       )
     })
