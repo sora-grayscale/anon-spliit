@@ -8,10 +8,14 @@
  * Verifies that REST endpoints return 401 `Two-factor authentication required`
  * when the session has not yet completed 2FA for the current login. Covers
  * representative endpoints from each affected area: 2FA management
- * (setup/disable) and admin whitelist (POST/GET). The remaining gated
- * endpoints (verify-setup, change-password, whitelist PATCH/DELETE) share
- * the same helper call and are exercised by the helper's own unit tests in
- * `src/lib/auth-helpers.test.ts`.
+ * (setup/disable) and admin whitelist (POST/GET).
+ *
+ * The remaining gated handlers (verify-setup, change-password, whitelist
+ * PATCH/DELETE) make the same `requiresTwoFactorResponse(session)` call;
+ * that wiring is verified by code review rather than by tests here. The
+ * helper's own behavior is covered by `src/lib/auth-helpers.test.ts`.
+ * Route-level tests for those endpoints can be added later if regression
+ * coverage becomes a concern.
  */
 
 jest.mock('@/lib/auth', () => ({
