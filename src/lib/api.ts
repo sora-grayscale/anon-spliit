@@ -569,6 +569,11 @@ export async function createRecurringExpenses(groupId?: string) {
         },
         // Scope by groupId when provided (Issue #132)
         ...(groupId ? { groupId } : {}),
+        // Skip links whose group is soft-deleted (Issue #141).
+        // Prevents grace-period generation that would surface on restore.
+        currentFrameExpense: {
+          group: { deletedAt: null },
+        },
       },
       include: {
         currentFrameExpense: {
