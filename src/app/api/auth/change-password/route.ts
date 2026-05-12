@@ -5,6 +5,7 @@
  */
 
 import { auth } from '@/lib/auth'
+import { requiresTwoFactorResponse } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import {
   checkRateLimit,
@@ -24,6 +25,12 @@ export async function POST(request: Request) {
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    // Block users who have not yet completed 2FA for this login (Issue #166).
+    // mustChangePassword is intentionally NOT gated here — this is the endpoint
+    // that lets such users clear that flag.
+    const twoFaResp = requiresTwoFactorResponse(session)
+    if (twoFaResp) return twoFaResp
 
     // Check rate limit before processing (Issue #43)
     const rateLimitKey = `${RATE_LIMIT_PREFIX}${session.user.email}`
