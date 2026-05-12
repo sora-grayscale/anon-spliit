@@ -125,7 +125,7 @@ const ExpenseListForSearch = ({
     isLoading: expensesAreLoading,
     fetchNextPage,
   } = trpc.groups.expenses.list.useInfiniteQuery(
-    { groupId, limit: PAGE_SIZE, filter: searchText },
+    { groupId, limit: PAGE_SIZE },
     { getNextPageParam: ({ nextCursor }) => nextCursor },
   )
 
@@ -216,7 +216,17 @@ const ExpenseListForSearch = ({
     }
   }, [rawExpenses, encryptionKey, isKeyLoading, hasKey])
 
-  const displayExpenses = decryptedExpenses
+  // Client-side title filter (Issue #164): the server no longer accepts
+  // a `filter` param because `title` is E2EE ciphertext on the server.
+  // We filter the already-decrypted, currently-loaded pages here.
+  const displayExpenses = useMemo(() => {
+    if (!decryptedExpenses) return decryptedExpenses
+    if (!searchText) return decryptedExpenses
+    const query = searchText.toLowerCase()
+    return decryptedExpenses.filter((e) =>
+      (e.title ?? '').toLowerCase().includes(query),
+    )
+  }, [decryptedExpenses, searchText])
 
   const isLoading =
     expensesAreLoading || isKeyLoading || !displayExpenses || !group

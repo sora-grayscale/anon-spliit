@@ -8,14 +8,12 @@ export const listGroupExpensesProcedure = publicProcedure
       groupId: z.string().min(1).max(30), // nanoid is typically 21 chars
       cursor: z.number().int().min(0).max(100000).optional(), // Pagination offset
       limit: z.number().int().min(1).max(100).optional(), // Max 100 items per request
-      filter: z.string().max(200).optional(), // Limit filter length to prevent abuse
     }),
   )
-  .query(async ({ input: { groupId, cursor = 0, limit = 10, filter } }) => {
+  .query(async ({ input: { groupId, cursor = 0, limit = 10 } }) => {
     const expenses = await getGroupExpenses(groupId, {
       offset: cursor,
       length: limit + 1,
-      filter,
     })
     return {
       expenses: expenses.slice(0, limit).map((expense) => ({
