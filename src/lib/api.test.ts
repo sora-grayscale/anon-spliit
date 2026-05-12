@@ -45,6 +45,7 @@ jest.mock('nanoid', () => ({
 import { ActivityType } from '@prisma/client'
 import {
   createGroup,
+  createRecurringExpenses,
   deleteGroup,
   getActivities,
   getCategories,
@@ -521,6 +522,50 @@ describe('API data access layer', () => {
           data: 'Dinner',
         },
       })
+    })
+  })
+
+  describe('createRecurringExpenses', () => {
+    it('skips links whose group is soft-deleted (Issue #141)', async () => {
+      ;(mockRecurringExpenseLink.findMany as jest.Mock).mockResolvedValue([])
+
+      await createRecurringExpenses()
+
+      expect(mockRecurringExpenseLink.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            currentFrameExpense: {
+              group: { deletedAt: null },
+            },
+          }),
+        }),
+      )
+    })
+
+    it('applies the soft-delete filter even when scoped by groupId', async () => {
+      ;(mockRecurringExpenseLink.findMany as jest.Mock).mockResolvedValue([])
+
+      await createRecurringExpenses('g1')
+
+      expect(mockRecurringExpenseLink.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            groupId: 'g1',
+            currentFrameExpense: {
+              group: { deletedAt: null },
+            },
+          }),
+        }),
+      )
+    })
+
+    it('does not invoke $transaction when no eligible links exist', async () => {
+      ;(mockRecurringExpenseLink.findMany as jest.Mock).mockResolvedValue([])
+      const mock$transaction = prisma.$transaction as jest.Mock
+
+      await createRecurringExpenses()
+
+      expect(mock$transaction).not.toHaveBeenCalled()
     })
   })
 })
