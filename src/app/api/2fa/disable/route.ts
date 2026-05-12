@@ -6,7 +6,10 @@
  */
 
 import { auth } from '@/lib/auth'
-import { passwordChangeRequiredResponse } from '@/lib/auth-helpers'
+import {
+  passwordChangeRequiredResponse,
+  requiresTwoFactorResponse,
+} from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import {
   checkRateLimit,
@@ -33,6 +36,9 @@ export async function POST(request: Request) {
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    const twoFaResp = requiresTwoFactorResponse(session)
+    if (twoFaResp) return twoFaResp
 
     const pwChangeResp = passwordChangeRequiredResponse(session)
     if (pwChangeResp) return pwChangeResp

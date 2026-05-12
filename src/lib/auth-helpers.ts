@@ -28,3 +28,28 @@ export function passwordChangeRequiredResponse(
   }
   return null
 }
+
+/**
+ * Returns a 401 NextResponse if the session indicates the user has not yet
+ * completed two-factor authentication for the current login, or null
+ * otherwise.
+ *
+ * Mirrors the `requiresTwoFactor` check in publicProcedure / adminProcedure
+ * (`src/trpc/init.ts`, Issue #166). REST API handlers must call this BEFORE
+ * `passwordChangeRequiredResponse` so the 2FA gate matches the tRPC ordering.
+ *
+ * The pre-auth 2FA verify endpoint (`/api/2fa/verify`, which runs without a
+ * full session) is intentionally exempt — calling this helper there would
+ * block the very flow that clears the flag.
+ */
+export function requiresTwoFactorResponse(
+  session: Session | null,
+): NextResponse | null {
+  if (session?.user?.requiresTwoFactor) {
+    return NextResponse.json(
+      { error: 'Two-factor authentication required' },
+      { status: 401 },
+    )
+  }
+  return null
+}
