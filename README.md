@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="public/anon-spliit.png" alt="anon-spliit" width="300" />
+  <img src="public/banner.png" alt="anon-spliit" width="600" />
 </p>
 
 <h1 align="center">anon spliit</h1>
@@ -67,7 +67,6 @@
 - Split expenses evenly or by custom amounts/percentages/shares
 - Track balances and get optimized reimbursement suggestions
 - Support for multiple currencies with exchange rates
-- Attach receipts and documents to expenses
 - Export data to JSON/CSV
 - Progressive Web App (PWA) - install on mobile
 - Dark mode support
@@ -83,7 +82,7 @@
 
 ### Deploy Your Own Instance
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fsora-grayscale%2Fspliit&project-name=my-anon-spliit&repository-name=my-anon-spliit&stores=%5B%7B%22type%22%3A%22postgres%22%7D%5D)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fsora-grayscale%2Fanon-spliit&project-name=my-anon-spliit&repository-name=my-anon-spliit&stores=%5B%7B%22type%22%3A%22postgres%22%7D%5D)
 
 ### Run Locally
 
