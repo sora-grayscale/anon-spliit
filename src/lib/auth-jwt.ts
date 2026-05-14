@@ -35,7 +35,16 @@ export async function jwtCallback({
   trigger?: 'signIn' | 'signUp' | 'update'
   session?: unknown
 }): Promise<JWT> {
-  // Initial sign-in: seed the token from authorize()'s return value.
+  // Initial sign-in: seed the token from authorize()'s return value and
+  // return immediately.
+  //
+  // The refresh path below depends on `token.iat`, but NextAuth populates
+  // `iat` *after* this callback returns on the first call. Feeding an
+  // undefined `iat` into `refreshJwtFromUser` makes `isTokenIatAcceptable`
+  // reject the token for any user whose `passwordChangedAt` is set,
+  // locking them out the moment they re-authenticate (regression caught
+  // in PR #220 review). authorize() has just read the DB, so the values
+  // we seeded are current — there is nothing to refresh on this hop.
   if (user) {
     ;(token as Record<string, unknown>).isAdmin = user.isAdmin
     ;(token as Record<string, unknown>).mustChangePassword =
@@ -43,6 +52,7 @@ export async function jwtCallback({
     ;(token as Record<string, unknown>).twoFactorEnabled = user.twoFactorEnabled
     ;(token as Record<string, unknown>).requiresTwoFactor =
       user.requiresTwoFactor
+    return token
   }
 
   if (!token.sub) return token

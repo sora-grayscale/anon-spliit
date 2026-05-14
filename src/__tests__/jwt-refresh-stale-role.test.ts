@@ -21,14 +21,13 @@
  *    window) keep working through the new code path.
  */
 
-import type { JWT } from 'next-auth/jwt'
-
 jest.mock('@/lib/session-validation', () => ({
   refreshJwtFromUser: jest.fn(),
 }))
 
 import { jwtCallback } from '@/lib/auth-jwt'
 import { refreshJwtFromUser } from '@/lib/session-validation'
+import type { JWT } from 'next-auth/jwt'
 
 const mockedRefresh = refreshJwtFromUser as jest.MockedFunction<
   typeof refreshJwtFromUser
@@ -55,14 +54,7 @@ describe('jwtCallback (Issue #173)', () => {
   })
 
   describe('initial sign-in (user parameter present)', () => {
-    it('seeds the token from authorize() and still refreshes from DB', async () => {
-      mockedRefresh.mockResolvedValueOnce({
-        isAdmin: true,
-        mustChangePassword: false,
-        twoFactorEnabled: true,
-        lastTwoFactorVerifiedAt: null,
-      })
-
+    it('seeds the token from authorize() without calling refresh', async () => {
       const token = makeToken({ isAdmin: false })
       const result = await jwtCallback({
         token,
@@ -77,12 +69,40 @@ describe('jwtCallback (Issue #173)', () => {
         trigger: 'signIn',
       })
 
-      // user.isAdmin=true seeded, then DB refresh keeps it true.
+      // Values come straight from authorize()'s return value.
       expect((result as Record<string, unknown>).isAdmin).toBe(true)
       expect((result as Record<string, unknown>).twoFactorEnabled).toBe(true)
-      // requiresTwoFactor stays true because the DB confirms 2FA is on and
-      // it was just seeded as true (no transition to clear it).
       expect((result as Record<string, unknown>).requiresTwoFactor).toBe(true)
+      // Refresh is intentionally skipped on initial sign-in because
+      // NextAuth has not yet populated `token.iat`, and the
+      // passwordChangedAt check in refreshJwtFromUser would otherwise
+      // reject the token.
+      expect(mockedRefresh).not.toHaveBeenCalled()
+    })
+
+    it('does not strip identity on initial sign-in when iat is absent and the user has passwordChangedAt set (PR #220 regression)', async () => {
+      // Pre-fix behaviour: refreshJwtFromUser ran with iat=undefined.
+      // isTokenIatAcceptable returns false whenever passwordChangedAt is
+      // set and iat is missing, so the callback would strip identity and
+      // the user could not re-authenticate even with the correct
+      // password. The fix is to skip refresh on initial sign-in.
+      const token = makeToken({ iat: undefined })
+
+      const result = (await jwtCallback({
+        token,
+        user: {
+          id: 'user-1',
+          email: 'user@example.com',
+          isAdmin: false,
+          mustChangePassword: false,
+          twoFactorEnabled: false,
+          requiresTwoFactor: false,
+        },
+        trigger: 'signIn',
+      })) as Record<string, unknown>
+
+      expect(result.sub).toBe('user-1')
+      expect(mockedRefresh).not.toHaveBeenCalled()
     })
   })
 
