@@ -1,4 +1,23 @@
-import { isTokenIatAcceptable } from './session-validation'
+/**
+ * @jest-environment node
+ */
+
+jest.mock('./prisma', () => ({
+  prisma: {
+    admin: {
+      findUnique: jest.fn(),
+    },
+    whitelistUser: {
+      findUnique: jest.fn(),
+    },
+  },
+}))
+
+import { prisma } from './prisma'
+import { isTokenIatAcceptable, refreshJwtFromUser } from './session-validation'
+
+const mockedAdminFind = prisma.admin.findUnique as jest.Mock
+const mockedWhitelistFind = prisma.whitelistUser.findUnique as jest.Mock
 
 describe('isTokenIatAcceptable (Issue #135)', () => {
   const tokenIat = 1_700_000_000 // arbitrary seconds-since-epoch
@@ -61,6 +80,180 @@ describe('isTokenIatAcceptable (Issue #135)', () => {
       const passwordChangedAt = new Date(1_700_000_000 * 1000) // T
       const freshIat = 1_700_000_000 + 300 // T+5min (seconds)
       expect(isTokenIatAcceptable(freshIat, passwordChangedAt)).toBe(true)
+    })
+  })
+})
+
+describe('refreshJwtFromUser (Issue #173)', () => {
+  const tokenIat = 1_700_000_000
+
+  beforeEach(() => {
+    mockedAdminFind.mockReset()
+    mockedWhitelistFind.mockReset()
+  })
+
+  it('returns null when userId is empty', async () => {
+    const result = await refreshJwtFromUser('', true, tokenIat)
+    expect(result).toBeNull()
+    // Neither table should be queried for an empty userId.
+    expect(mockedAdminFind).not.toHaveBeenCalled()
+    expect(mockedWhitelistFind).not.toHaveBeenCalled()
+  })
+
+  describe('isAdminHint = true', () => {
+    it('returns refreshed values when the admin row exists', async () => {
+      mockedAdminFind.mockResolvedValueOnce({
+        mustChangePassword: false,
+        twoFactorEnabled: true,
+        lastTwoFactorVerifiedAt: new Date(tokenIat * 1000),
+        passwordChangedAt: null,
+      })
+
+      const result = await refreshJwtFromUser('admin-1', true, tokenIat)
+
+      expect(result).toEqual({
+        isAdmin: true,
+        mustChangePassword: false,
+        twoFactorEnabled: true,
+        lastTwoFactorVerifiedAt: new Date(tokenIat * 1000),
+      })
+      // Only the admin table is queried — whitelist remains untouched.
+      expect(mockedWhitelistFind).not.toHaveBeenCalled()
+    })
+
+    it('reflects admin-driven changes to mustChangePassword and twoFactorEnabled', async () => {
+      mockedAdminFind.mockResolvedValueOnce({
+        mustChangePassword: true,
+        twoFactorEnabled: false,
+        lastTwoFactorVerifiedAt: null,
+        passwordChangedAt: null,
+      })
+
+      const result = await refreshJwtFromUser('admin-1', true, tokenIat)
+
+      expect(result?.mustChangePassword).toBe(true)
+      expect(result?.twoFactorEnabled).toBe(false)
+    })
+
+    it('returns null when the admin was demoted (no admin row)', async () => {
+      // Admin demotion: the row is removed from the admin table, so the
+      // stale "isAdmin: true" token claim no longer matches any row.
+      mockedAdminFind.mockResolvedValueOnce(null)
+
+      const result = await refreshJwtFromUser('admin-1', true, tokenIat)
+
+      expect(result).toBeNull()
+      // Whitelist lookup is intentionally not attempted — the caller will
+      // strip identity and the user re-authenticates next request.
+      expect(mockedWhitelistFind).not.toHaveBeenCalled()
+    })
+
+    it('rejects the token when iat predates passwordChangedAt (Issue #135)', async () => {
+      mockedAdminFind.mockResolvedValueOnce({
+        mustChangePassword: false,
+        twoFactorEnabled: false,
+        lastTwoFactorVerifiedAt: null,
+        passwordChangedAt: new Date((tokenIat + 3600) * 1000), // 1h after iat
+      })
+
+      const result = await refreshJwtFromUser('admin-1', true, tokenIat)
+
+      expect(result).toBeNull()
+    })
+
+    it('coerces null twoFactorEnabled to false', async () => {
+      // Defense in depth: even if the column was somehow null, the
+      // returned shape must use a strict boolean.
+      mockedAdminFind.mockResolvedValueOnce({
+        mustChangePassword: false,
+        twoFactorEnabled: null,
+        lastTwoFactorVerifiedAt: null,
+        passwordChangedAt: null,
+      })
+
+      const result = await refreshJwtFromUser('admin-1', true, tokenIat)
+
+      expect(result?.twoFactorEnabled).toBe(false)
+    })
+  })
+
+  describe('isAdminHint = false', () => {
+    it('returns refreshed values when the whitelist row exists', async () => {
+      mockedWhitelistFind.mockResolvedValueOnce({
+        mustChangePassword: true,
+        twoFactorEnabled: false,
+        lastTwoFactorVerifiedAt: null,
+        passwordChangedAt: null,
+      })
+
+      const result = await refreshJwtFromUser('user-1', false, tokenIat)
+
+      expect(result).toEqual({
+        isAdmin: false,
+        mustChangePassword: true,
+        twoFactorEnabled: false,
+        lastTwoFactorVerifiedAt: null,
+      })
+      expect(mockedAdminFind).not.toHaveBeenCalled()
+    })
+
+    it('returns null when the whitelist user no longer exists', async () => {
+      mockedWhitelistFind.mockResolvedValueOnce(null)
+
+      const result = await refreshJwtFromUser('user-1', false, tokenIat)
+
+      expect(result).toBeNull()
+    })
+
+    it('rejects the token when iat predates passwordChangedAt', async () => {
+      mockedWhitelistFind.mockResolvedValueOnce({
+        mustChangePassword: false,
+        twoFactorEnabled: false,
+        lastTwoFactorVerifiedAt: null,
+        passwordChangedAt: new Date((tokenIat + 1) * 1000), // 1s after iat
+      })
+
+      const result = await refreshJwtFromUser('user-1', false, tokenIat)
+
+      expect(result).toBeNull()
+    })
+  })
+
+  describe('attack and admin-action scenarios', () => {
+    it('admin revokes admin role -> session invalidated on next request', async () => {
+      // Pre-condition: the JWT was issued while the user was admin.
+      // Admin removes them from the admin table.
+      mockedAdminFind.mockResolvedValueOnce(null)
+
+      const result = await refreshJwtFromUser('revoked-1', true, tokenIat)
+
+      expect(result).toBeNull()
+    })
+
+    it('admin disables 2FA -> twoFactorEnabled reflects the new state', async () => {
+      mockedAdminFind.mockResolvedValueOnce({
+        mustChangePassword: false,
+        twoFactorEnabled: false,
+        lastTwoFactorVerifiedAt: null,
+        passwordChangedAt: null,
+      })
+
+      const result = await refreshJwtFromUser('admin-1', true, tokenIat)
+
+      expect(result?.twoFactorEnabled).toBe(false)
+    })
+
+    it('admin sets mustChangePassword=true -> reflected on next request', async () => {
+      mockedWhitelistFind.mockResolvedValueOnce({
+        mustChangePassword: true,
+        twoFactorEnabled: false,
+        lastTwoFactorVerifiedAt: null,
+        passwordChangedAt: null,
+      })
+
+      const result = await refreshJwtFromUser('user-1', false, tokenIat)
+
+      expect(result?.mustChangePassword).toBe(true)
     })
   })
 })
