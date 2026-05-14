@@ -14,10 +14,7 @@ jest.mock('./prisma', () => ({
 }))
 
 import { prisma } from './prisma'
-import {
-  isTokenIatAcceptable,
-  refreshJwtFromUser,
-} from './session-validation'
+import { isTokenIatAcceptable, refreshJwtFromUser } from './session-validation'
 
 const mockedAdminFind = prisma.admin.findUnique as jest.Mock
 const mockedWhitelistFind = prisma.whitelistUser.findUnique as jest.Mock
