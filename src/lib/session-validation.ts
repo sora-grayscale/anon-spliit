@@ -1,16 +1,25 @@
 /**
- * Session validation helpers for invalidating JWTs after password change (Issue #135)
+ * Session validation helpers for the JWT callback (Issues #135, #173).
  *
- * When a user changes their password, all previously-issued JWTs should be
- * rejected so a stolen token cannot continue to be used. This is achieved by:
- *  1. Storing `passwordChangedAt` on the user record at password change time.
- *  2. On every JWT validation, comparing the token's `iat` (issued-at) with
- *     the user's current `passwordChangedAt`. If the token predates the
- *     password change, it is considered invalid.
+ * Two concerns live here:
  *
- * Backward compatibility: users that have never changed their password since
- * this column was added have `passwordChangedAt = null`, in which case the
- * check always passes (no constraint).
+ *  1. Invalidating JWTs after a password change (#135). When a user changes
+ *     their password, all previously-issued JWTs should be rejected so a
+ *     stolen token cannot continue to be used. This is achieved by storing
+ *     `passwordChangedAt` on the user record at password change time and
+ *     comparing it to the token's `iat` (issued-at) on every validation.
+ *
+ *  2. Reflecting admin-driven changes on the next request (#173). The JWT
+ *     stays alive until token expiry, so admin actions that revoke the
+ *     admin role, disable a user's 2FA, or set `mustChangePassword` would
+ *     otherwise not take effect until the user re-authenticates. We refresh
+ *     these security-critical fields from the database on every JWT
+ *     validation. This piggy-backs on the same DB lookup that #135 already
+ *     performed, so no additional round trip is added.
+ *
+ * Backward compatibility for #135: users that have never changed their
+ * password since the column was added have `passwordChangedAt = null`, in
+ * which case the timestamp check always passes.
  */
 
 import { prisma } from './prisma'
@@ -36,33 +45,79 @@ export function isTokenIatAcceptable(
 }
 
 /**
- * Look up the user's `passwordChangedAt` and decide whether the JWT is still
- * acceptable. Queries only the table indicated by `isAdmin` to keep this a
+ * Snapshot of the security-critical user fields the JWT callback overlays
+ * onto the token on every validation.
+ */
+export type RefreshedUser = {
+  isAdmin: boolean
+  mustChangePassword: boolean
+  twoFactorEnabled: boolean
+  lastTwoFactorVerifiedAt: Date | null
+}
+
+/**
+ * Look up the user indicated by the JWT and return the current values for
+ * the security-critical fields the JWT callback mirrors into the token.
+ *
+ * Returns `null` (= reject the token) when:
+ *  - `userId` is empty.
+ *  - The user no longer exists in the table indicated by `isAdminHint`. For
+ *    `isAdminHint === true` this includes admin demotion (admin row deleted
+ *    or moved to whitelist).
+ *  - The token's `iat` predates the user's `passwordChangedAt` (#135).
+ *
+ * `isAdmin` in the result is derived from which table the lookup succeeded
+ * in, not from the (possibly stale) token claim.
+ *
+ * Queries only the one table indicated by `isAdminHint` to keep this a
  * single indexed lookup per request.
  */
-export async function isJwtValidForUser(
+export async function refreshJwtFromUser(
   userId: string,
-  isAdmin: boolean,
+  isAdminHint: boolean,
   tokenIatSeconds: number | undefined,
-): Promise<boolean> {
-  if (!userId) return false
+): Promise<RefreshedUser | null> {
+  if (!userId) return null
 
-  let passwordChangedAt: Date | null = null
-  if (isAdmin) {
+  if (isAdminHint) {
     const admin = await prisma.admin.findUnique({
       where: { id: userId },
-      select: { passwordChangedAt: true },
+      select: {
+        mustChangePassword: true,
+        twoFactorEnabled: true,
+        lastTwoFactorVerifiedAt: true,
+        passwordChangedAt: true,
+      },
     })
-    if (!admin) return false
-    passwordChangedAt = admin.passwordChangedAt
-  } else {
-    const user = await prisma.whitelistUser.findUnique({
-      where: { id: userId },
-      select: { passwordChangedAt: true },
-    })
-    if (!user) return false
-    passwordChangedAt = user.passwordChangedAt
+    if (!admin) return null
+    if (!isTokenIatAcceptable(tokenIatSeconds, admin.passwordChangedAt)) {
+      return null
+    }
+    return {
+      isAdmin: true,
+      mustChangePassword: admin.mustChangePassword,
+      twoFactorEnabled: admin.twoFactorEnabled ?? false,
+      lastTwoFactorVerifiedAt: admin.lastTwoFactorVerifiedAt ?? null,
+    }
   }
 
-  return isTokenIatAcceptable(tokenIatSeconds, passwordChangedAt)
+  const user = await prisma.whitelistUser.findUnique({
+    where: { id: userId },
+    select: {
+      mustChangePassword: true,
+      twoFactorEnabled: true,
+      lastTwoFactorVerifiedAt: true,
+      passwordChangedAt: true,
+    },
+  })
+  if (!user) return null
+  if (!isTokenIatAcceptable(tokenIatSeconds, user.passwordChangedAt)) {
+    return null
+  }
+  return {
+    isAdmin: false,
+    mustChangePassword: user.mustChangePassword,
+    twoFactorEnabled: user.twoFactorEnabled ?? false,
+    lastTwoFactorVerifiedAt: user.lastTwoFactorVerifiedAt ?? null,
+  }
 }

@@ -2,13 +2,13 @@
  * NextAuth.js configuration for Private Instance Mode (Issue #4)
  */
 
+import { jwtCallback } from '@/lib/auth-jwt'
 import { prisma } from '@/lib/prisma'
 import {
   checkRateLimitAsync,
   clearAttemptsAsync,
   recordFailedAttemptAsync,
 } from '@/lib/rate-limit'
-import { isJwtValidForUser } from '@/lib/session-validation'
 import { PrismaAdapter } from '@auth/prisma-adapter'
 import bcrypt from 'bcryptjs'
 import NextAuth, { type NextAuthConfig } from 'next-auth'
@@ -127,100 +127,7 @@ const authConfig: NextAuthConfig = {
     strategy: 'jwt',
   },
   callbacks: {
-    async jwt({ token, user, trigger, session: updateData }) {
-      if (user) {
-        ;(token as Record<string, unknown>).isAdmin = user.isAdmin
-        ;(token as Record<string, unknown>).mustChangePassword =
-          user.mustChangePassword
-        ;(token as Record<string, unknown>).twoFactorEnabled =
-          user.twoFactorEnabled
-        ;(token as Record<string, unknown>).requiresTwoFactor =
-          user.requiresTwoFactor
-      }
-      // Handle session update - always refresh from database for security
-      // Never trust client-sent values for security-critical flags
-      if (trigger === 'update' && token.sub) {
-        const admin = await prisma.admin.findUnique({
-          where: { id: token.sub },
-          select: {
-            mustChangePassword: true,
-            twoFactorEnabled: true,
-            lastTwoFactorVerifiedAt: true,
-          },
-        })
-        if (admin) {
-          ;(token as Record<string, unknown>).mustChangePassword =
-            admin.mustChangePassword
-          ;(token as Record<string, unknown>).twoFactorEnabled =
-            admin.twoFactorEnabled ?? false
-          // Clear requiresTwoFactor only if server-side 2FA verification is recent (Issue #123)
-          // Never trust client-sent twoFactorVerified flag alone
-          if (
-            updateData &&
-            typeof updateData === 'object' &&
-            'twoFactorVerified' in updateData &&
-            updateData.twoFactorVerified === true &&
-            admin.lastTwoFactorVerifiedAt &&
-            Date.now() - admin.lastTwoFactorVerifiedAt.getTime() < 5 * 60 * 1000
-          ) {
-            ;(token as Record<string, unknown>).requiresTwoFactor = false
-          }
-        } else {
-          const whitelistUser = await prisma.whitelistUser.findUnique({
-            where: { id: token.sub },
-            select: {
-              mustChangePassword: true,
-              twoFactorEnabled: true,
-              lastTwoFactorVerifiedAt: true,
-            },
-          })
-          if (whitelistUser) {
-            ;(token as Record<string, unknown>).mustChangePassword =
-              whitelistUser.mustChangePassword
-            ;(token as Record<string, unknown>).twoFactorEnabled =
-              whitelistUser.twoFactorEnabled ?? false
-            // Clear requiresTwoFactor only if server-side 2FA verification is recent (Issue #123)
-            if (
-              updateData &&
-              typeof updateData === 'object' &&
-              'twoFactorVerified' in updateData &&
-              updateData.twoFactorVerified === true &&
-              whitelistUser.lastTwoFactorVerifiedAt &&
-              Date.now() - whitelistUser.lastTwoFactorVerifiedAt.getTime() <
-                5 * 60 * 1000
-            ) {
-              ;(token as Record<string, unknown>).requiresTwoFactor = false
-            }
-          }
-        }
-      }
-
-      // Invalidate the token if the user's password has been changed since the
-      // token was issued (Issue #135). The check runs on every JWT callback,
-      // backed by a single indexed DB lookup. Users that never changed their
-      // password since the migration have `passwordChangedAt = null` and are
-      // unaffected. When invalid, we clear the auth-relevant fields so the
-      // session callback yields a session without a user id, which causes
-      // downstream guards (publicProcedure, adminProcedure, route handlers)
-      // that test `session?.user?.id` to treat the request as unauthenticated.
-      if (token.sub && typeof token.iat === 'number') {
-        const isAdmin = (token as Record<string, unknown>).isAdmin === true
-        const ok = await isJwtValidForUser(token.sub, isAdmin, token.iat)
-        if (!ok) {
-          return {
-            // Preserve only the bare token shell; strip identity and roles.
-            ...token,
-            sub: undefined,
-            isAdmin: false,
-            mustChangePassword: false,
-            twoFactorEnabled: false,
-            requiresTwoFactor: false,
-          } as typeof token
-        }
-      }
-
-      return token
-    },
+    jwt: jwtCallback,
     async session({ session, token }) {
       // When the jwt callback invalidates a token (e.g. password changed after
       // issuance, Issue #135), `token.sub` is cleared. We drop `session.user`
