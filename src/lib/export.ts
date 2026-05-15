@@ -33,6 +33,7 @@ export interface ExportGroup {
 export interface ExportExpense {
   expenseDate: Date | string
   title: string
+  notes?: string | null
   categoryId?: number | string | null
   amount: number
   originalAmount?: number | null
@@ -49,9 +50,11 @@ export interface ExportExpense {
 
 function formatDate(d: Date | string): string {
   const date = d instanceof Date ? d : new Date(d)
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
+  // expenseDate is a Prisma @db.Date stored at UTC midnight; using local
+  // components would shift the day by one in west-of-UTC timezones.
+  const y = date.getUTCFullYear()
+  const m = String(date.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(date.getUTCDate()).padStart(2, '0')
   return `${y}-${m}-${day}`
 }
 

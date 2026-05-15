@@ -1,4 +1,4 @@
-import { getGroupExpenses } from '@/lib/api'
+import { getGroupExpenseCount, getGroupExpenses } from '@/lib/api'
 import { publicProcedure } from '@/trpc/init'
 import { z } from 'zod'
 
@@ -8,7 +8,12 @@ const MAX_EXPENSES_LIMIT = 10000
 
 /**
  * List all expenses for a group with upper bound limit
- * Used for client-side balance calculation with encrypted amounts
+ * Used for client-side balance calculation with encrypted amounts.
+ *
+ * Returns `totalCount` alongside the (possibly truncated) `expenses` so
+ * callers like the client-side export (Issue #131) can detect truncation
+ * and refuse to emit a partial file. Pagination support for groups
+ * exceeding this limit is tracked in Issue #170.
  */
 export const listAllGroupExpensesProcedure = publicProcedure
   .input(
@@ -24,12 +29,16 @@ export const listAllGroupExpensesProcedure = publicProcedure
     }),
   )
   .query(async ({ input: { groupId, limit } }) => {
-    const expenses = await getGroupExpenses(groupId, { length: limit })
+    const [expenses, totalCount] = await Promise.all([
+      getGroupExpenses(groupId, { length: limit }),
+      getGroupExpenseCount(groupId),
+    ])
     return {
       expenses: expenses.map((expense) => ({
         ...expense,
         createdAt: new Date(expense.createdAt),
         expenseDate: new Date(expense.expenseDate),
       })),
+      totalCount,
     }
   })

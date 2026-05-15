@@ -53,6 +53,15 @@ export default function ExportButton({ groupId }: { groupId: string }) {
       })
       return
     }
+    if (expensesData.totalCount > expensesData.expenses.length) {
+      // Refuse partial export — listAll caps at MAX_EXPENSES_LIMIT (10,000).
+      // Cursor pagination for very large groups is tracked in #170.
+      toast({
+        description: `Export aborted: this group has ${expensesData.totalCount} expenses, exceeding the client-side limit of ${expensesData.expenses.length}.`,
+        variant: 'destructive',
+      })
+      return
+    }
     setIsExporting(true)
     try {
       const group = currentGroup.group as unknown as ExportGroup

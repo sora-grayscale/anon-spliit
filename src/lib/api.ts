@@ -444,6 +444,7 @@ export async function getGroupExpenses(
       expenseDate: true,
       id: true,
       isReimbursement: true,
+      notes: true,
       originalAmount: true,
       originalCurrency: true,
       paidBy: { select: { id: true, name: true } },

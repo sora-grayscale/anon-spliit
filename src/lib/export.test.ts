@@ -153,6 +153,14 @@ describe('buildCsvFromGroup', () => {
     const csv = buildCsvFromGroup(baseGroup, [makeExpense()])
     expect(csv.charCodeAt(0)).not.toBe(0xfeff)
   })
+
+  test('formats date from UTC components (stable across timezones)', () => {
+    const csv = buildCsvFromGroup(baseGroup, [
+      makeExpense({ expenseDate: new Date('2026-01-15T00:00:00.000Z') }),
+    ])
+    const [, row] = csv.split('\n')
+    expect(row).toContain('"2026-01-15"')
+  })
 })
 
 describe('buildJsonFromGroup', () => {
@@ -172,5 +180,14 @@ describe('buildJsonFromGroup', () => {
     expect(parsed.expenses).toHaveLength(1)
     expect(parsed.expenses[0].title).toBe('Dinner')
     expect(parsed.expenses[0].amount).toBe(10000)
+  })
+
+  test('includes decrypted notes when present on the expense', () => {
+    const expense = makeExpense({ notes: 'Decrypted memo text' })
+    const json = buildJsonFromGroup(baseGroup, [expense])
+    const parsed = JSON.parse(json) as {
+      expenses: Array<{ notes?: string | null }>
+    }
+    expect(parsed.expenses[0].notes).toBe('Decrypted memo text')
   })
 })
