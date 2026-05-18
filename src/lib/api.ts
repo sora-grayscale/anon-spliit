@@ -439,10 +439,14 @@ export async function getGroupExpenses(
     select: {
       amount: true,
       categoryId: true,
+      conversionRate: true,
       createdAt: true,
       expenseDate: true,
       id: true,
       isReimbursement: true,
+      notes: true,
+      originalAmount: true,
+      originalCurrency: true,
       paidBy: { select: { id: true, name: true } },
       paidFor: {
         select: {
