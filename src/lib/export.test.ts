@@ -93,6 +93,59 @@ describe('calculateExpenseShareForExport', () => {
   })
 })
 
+describe('calculateExpenseShareForExport (string inputs — unencrypted groups)', () => {
+  test('EVENLY: coerces string amount/shares (regression: 100 EUR EVENLY)', () => {
+    const e = makeExpense({
+      amount: '10000',
+      paidFor: [
+        { participant: { id: 'p1', name: 'Alice' }, shares: '1' },
+        { participant: { id: 'p2', name: 'Bob' }, shares: '1' },
+      ],
+    })
+    expect(calculateExpenseShareForExport(e, 'p1')).toBe(5000)
+    expect(calculateExpenseShareForExport(e, 'p2')).toBe(5000)
+  })
+
+  test('BY_SHARES: coerces string shares (1:3 ratio)', () => {
+    const e = makeExpense({
+      splitMode: 'BY_SHARES',
+      amount: '10000',
+      paidFor: [
+        { participant: { id: 'p1', name: 'Alice' }, shares: '1' },
+        { participant: { id: 'p2', name: 'Bob' }, shares: '3' },
+      ],
+    })
+    expect(calculateExpenseShareForExport(e, 'p1')).toBe(2500)
+    expect(calculateExpenseShareForExport(e, 'p2')).toBe(7500)
+  })
+
+  test('BY_AMOUNT: coerces string shares', () => {
+    const e = makeExpense({
+      splitMode: 'BY_AMOUNT',
+      amount: '10000',
+      paidFor: [
+        { participant: { id: 'p1', name: 'Alice' }, shares: '4000' },
+        { participant: { id: 'p2', name: 'Bob' }, shares: '6000' },
+      ],
+    })
+    expect(calculateExpenseShareForExport(e, 'p1')).toBe(4000)
+    expect(calculateExpenseShareForExport(e, 'p2')).toBe(6000)
+  })
+
+  test('BY_PERCENTAGE: coerces string amount/shares', () => {
+    const e = makeExpense({
+      splitMode: 'BY_PERCENTAGE',
+      amount: '10000',
+      paidFor: [
+        { participant: { id: 'p1', name: 'Alice' }, shares: '2500' },
+        { participant: { id: 'p2', name: 'Bob' }, shares: '7500' },
+      ],
+    })
+    expect(calculateExpenseShareForExport(e, 'p1')).toBe(2500)
+    expect(calculateExpenseShareForExport(e, 'p2')).toBe(7500)
+  })
+})
+
 describe('buildCsvFromGroup', () => {
   test('header includes core columns and participant names', () => {
     const csv = buildCsvFromGroup(baseGroup, [makeExpense()])

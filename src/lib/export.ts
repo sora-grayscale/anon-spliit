@@ -10,7 +10,11 @@
 import { getCategoryInfo } from '@/app/groups/[groupId]/expenses/category-icon'
 import { escapeCsvCell, escapeCsvRow } from '@/lib/csv-injection'
 import { getCurrency } from '@/lib/currency'
-import { formatAmountAsDecimal, getCurrencyFromGroup } from '@/lib/utils'
+import {
+  formatAmountAsDecimal,
+  getCurrencyFromGroup,
+  toNumber,
+} from '@/lib/utils'
 import { Parser } from '@json2csv/plainjs'
 
 const splitModeLabel = {
@@ -35,14 +39,19 @@ export interface ExportExpense {
   title: string
   notes?: string | null
   categoryId?: number | string | null
-  amount: number
-  originalAmount?: number | null
+  // amount / originalAmount / shares are stored as strings in the DB
+  // (src/lib/api.ts createExpense) and only become `number` after
+  // decryptExpenses. The unencrypted-group export path skips decryption
+  // and passes raw strings through, so the export helpers must accept
+  // both — otherwise `sum + pf.shares` concatenates strings.
+  amount: number | string
+  originalAmount?: number | string | null
   originalCurrency?: string | null
   conversionRate?: number | string | null
   paidBy: { id: string; name: string }
   paidFor: Array<{
     participant: { id: string; name: string }
-    shares: number
+    shares: number | string
   }>
   isReimbursement: boolean
   splitMode: ExportSplitMode
@@ -74,17 +83,24 @@ export function calculateExpenseShareForExport(
     (pf) => pf.participant.id === participantId,
   )
   if (!entry) return 0
-  const share = entry.shares
+  // Coerce every numeric input via toNumber so unencrypted groups
+  // (which pass raw DB strings without going through decryptExpenses)
+  // do not trigger string concatenation in the EVENLY/BY_SHARES sum.
+  const amount = toNumber(expense.amount)
+  const share = toNumber(entry.shares)
   switch (expense.splitMode) {
     case 'BY_AMOUNT':
       return share
     case 'BY_PERCENTAGE':
-      return (expense.amount * share) / 10000
+      return (amount * share) / 10000
     case 'EVENLY':
     case 'BY_SHARES': {
-      const total = expense.paidFor.reduce((sum, pf) => sum + pf.shares, 0)
+      const total = expense.paidFor.reduce(
+        (sum, pf) => sum + toNumber(pf.shares),
+        0,
+      )
       if (total === 0) return 0
-      return (expense.amount * share) / total
+      return (amount * share) / total
     }
     default: {
       const _exhaustive: never = expense.splitMode
