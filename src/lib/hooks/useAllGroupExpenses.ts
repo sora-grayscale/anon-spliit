@@ -148,11 +148,18 @@ export function useAllGroupExpenses(
         if (isCurrent()) setIsFetchingNextPage(true)
         let page: ListAllPage
         try {
-          page = await utils.groups.expenses.listAll.fetch({
-            groupId,
-            limit: PAGE_SIZE,
-            cursor,
-          })
+          // staleTime: 0 forces a network fetch on every page. The default
+          // query-client staleTime (30s) would otherwise let an invalidate()
+          // be raced by a cached-response read, or let a quick re-visit serve
+          // stale balances/export after a cross-device update.
+          page = await utils.groups.expenses.listAll.fetch(
+            {
+              groupId,
+              limit: PAGE_SIZE,
+              cursor,
+            },
+            { staleTime: 0 },
+          )
         } catch (err) {
           const error = err instanceof Error ? err : new Error(String(err))
           if (isCurrent()) setQueryError(error)
@@ -216,7 +223,16 @@ export function useAllGroupExpenses(
     }
   }, [autoDrain, resetKey])
 
-  const isLoading = enabled && autoDrain ? isWorking || isKeyLoading : isWorking
+  // In autoDrain mode the drain `useEffect` only schedules `fetchAll` after
+  // the first paint, so without the no-data clause `isLoading` would briefly
+  // be `false` while `expenses === undefined`, exposing a "zero balances /
+  // empty totals" frame to consumers (Issue #170 regression guard).
+  const isLoading =
+    enabled && autoDrain
+      ? isWorking ||
+        isKeyLoading ||
+        (!expenses && !queryError && !decryptionError)
+      : isWorking
 
   return {
     expenses,

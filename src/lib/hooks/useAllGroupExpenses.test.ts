@@ -99,11 +99,10 @@ describe('useAllGroupExpenses (Issue #170)', () => {
       expect(result.current.queryError).toBeNull()
       expect(result.current.decryptionError).toBeNull()
       expect(mockListAllFetch).toHaveBeenCalledTimes(1)
-      expect(mockListAllFetch).toHaveBeenCalledWith({
-        groupId: 'g1',
-        limit: 200,
-        cursor: undefined,
-      })
+      expect(mockListAllFetch).toHaveBeenCalledWith(
+        { groupId: 'g1', limit: 200, cursor: undefined },
+        { staleTime: 0 },
+      )
     })
 
     it('drains multiple pages sequentially via cursor loop', async () => {
@@ -136,15 +135,19 @@ describe('useAllGroupExpenses (Issue #170)', () => {
       expect(mockListAllFetch).toHaveBeenCalledTimes(3)
       // Second page should re-use the first page's nextCursor verbatim
       // (ISO string wire contract).
-      expect(mockListAllFetch).toHaveBeenNthCalledWith(2, {
-        groupId: 'g1',
-        limit: 200,
-        cursor: {
-          expenseDate: '2026-05-09T12:00:00.000Z',
-          createdAt: '2026-05-09T11:00:00.000Z',
-          id: 'a',
+      expect(mockListAllFetch).toHaveBeenNthCalledWith(
+        2,
+        {
+          groupId: 'g1',
+          limit: 200,
+          cursor: {
+            expenseDate: '2026-05-09T12:00:00.000Z',
+            createdAt: '2026-05-09T11:00:00.000Z',
+            id: 'a',
+          },
         },
-      })
+        { staleTime: 0 },
+      )
     })
 
     it('does NOT expose partial decrypted state mid-drain', async () => {
@@ -272,6 +275,40 @@ describe('useAllGroupExpenses (Issue #170)', () => {
       )
       rerender()
       await waitFor(() => expect(result.current.expenses?.length ?? 0).toBe(2))
+    })
+
+    it('reports isLoading=true on initial render before the drain has started (Codex iter1 Medium #1)', () => {
+      withKey()
+      // Never-resolving page so the drain stays in-flight indefinitely.
+      mockListAllFetch.mockImplementation(() => new Promise(() => {}))
+      const { result } = renderHook(() => useAllGroupExpenses('g1'))
+      // BEFORE any effect runs: expenses must be undefined AND isLoading
+      // must already be true so consumers do not flash a zero-state UI.
+      expect(result.current.expenses).toBeUndefined()
+      expect(result.current.isLoading).toBe(true)
+    })
+
+    it('passes staleTime: 0 to every page fetch to bypass the React Query cache (Codex iter1 Medium #2)', async () => {
+      withKey()
+      mockListAllFetch
+        .mockResolvedValueOnce(
+          makePage([{ id: 'a', title: 't', amount: '1' }], {
+            expenseDate: '2026-05-09T12:00:00.000Z',
+            createdAt: '2026-05-09T11:00:00.000Z',
+            id: 'a',
+          }),
+        )
+        .mockResolvedValueOnce(
+          makePage([{ id: 'b', title: 't', amount: '2' }], null),
+        )
+
+      const { result } = renderHook(() => useAllGroupExpenses('g1'))
+      await waitFor(() => expect(result.current.isLoading).toBe(false))
+
+      expect(mockListAllFetch).toHaveBeenCalledTimes(2)
+      for (const call of mockListAllFetch.mock.calls) {
+        expect(call[1]).toEqual(expect.objectContaining({ staleTime: 0 }))
+      }
     })
   })
 
