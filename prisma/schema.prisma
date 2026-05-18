@@ -80,6 +80,9 @@ model Expense {
   @@index([groupId, expenseDate(sort: Desc)])  // For expense listing by date
   @@index([groupId, createdAt(sort: Desc)])    // For recent expenses query
   @@index([paidById])                          // For participant-specific queries
+  // Keyset (cursor) pagination index for listAll (Issue #170).
+  // Order must match the stable sort: expenseDate DESC, createdAt DESC, id DESC.
+  @@index([groupId, expenseDate(sort: Desc), createdAt(sort: Desc), id(sort: Desc)])
 }
 
 enum SplitMode {

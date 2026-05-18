@@ -422,14 +422,90 @@ export async function getCategories() {
   return prisma.category.findMany()
 }
 
+/**
+ * Stable keyset (cursor) for `getGroupExpenses` keyset-pagination mode.
+ *
+ * Order MUST match the procedure's `orderBy` (expenseDate, createdAt, id all DESC).
+ * `id` is required as a final tie-breaker so that two rows sharing
+ * `expenseDate` AND `createdAt` cannot cause page skip/duplication (Issue #170).
+ */
+export type GroupExpensesCursor = {
+  expenseDate: Date
+  createdAt: Date
+  id: string
+}
+
+/**
+ * Options for {@link getGroupExpenses}.
+ *
+ * Two mutually-exclusive paging modes:
+ * - `{ offset?, length? }` — legacy offset pagination (used by callers that
+ *   do not need stable pagination, e.g. `getGroupExpensesParticipants`).
+ * - `{ cursor, limit }` — keyset pagination for `listAll` (Issue #170).
+ *   `cursor` undefined means first page; `limit` is required.
+ *
+ * The discriminated union prevents simultaneous offset+cursor at the type
+ * level; a runtime guard inside the function backs this up defensively.
+ */
+export type GetGroupExpensesOptions =
+  | {
+      offset?: number
+      length?: number
+      cursor?: undefined
+      limit?: undefined
+    }
+  | {
+      cursor: GroupExpensesCursor | undefined
+      limit: number
+      offset?: undefined
+      length?: undefined
+    }
+
 export async function getGroupExpenses(
   groupId: string,
-  options?: { offset?: number; length?: number },
+  options?: GetGroupExpensesOptions,
 ) {
   // Server-side title filtering removed (Issue #164): `title` is E2EE
   // ciphertext, so SQL LIKE/ILIKE on it can never match user-typed plaintext
   // and would leak the search term to server logs. Search is now performed
   // client-side after decryption.
+
+  const isKeysetMode =
+    options !== undefined &&
+    ('cursor' in options || 'limit' in options) &&
+    (options.cursor !== undefined || options.limit !== undefined)
+  const isOffsetMode =
+    options !== undefined &&
+    (('offset' in options && options.offset !== undefined) ||
+      ('length' in options && options.length !== undefined))
+
+  if (isKeysetMode && isOffsetMode) {
+    throw new Error(
+      'getGroupExpenses: offset/length and cursor/limit cannot be specified simultaneously',
+    )
+  }
+
+  const cursor =
+    isKeysetMode && 'cursor' in options ? options.cursor : undefined
+
+  const where = cursor
+    ? {
+        groupId,
+        OR: [
+          { expenseDate: { lt: cursor.expenseDate } },
+          {
+            expenseDate: cursor.expenseDate,
+            createdAt: { lt: cursor.createdAt },
+          },
+          {
+            expenseDate: cursor.expenseDate,
+            createdAt: cursor.createdAt,
+            id: { lt: cursor.id },
+          },
+        ],
+      }
+    : { groupId }
+
   return prisma.expense.findMany({
     select: {
       amount: true,
@@ -453,15 +529,13 @@ export async function getGroupExpenses(
       recurrenceRule: true,
       title: true,
     },
-    where: { groupId },
-    orderBy: [{ expenseDate: 'desc' }, { createdAt: 'desc' }],
-    skip: options && options.offset,
-    take: options && options.length,
+    where,
+    // `id` DESC is a stable tie-breaker required by the cursor contract
+    // (Issue #170). Offset-mode callers tolerate the extra tiebreaker.
+    orderBy: [{ expenseDate: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
+    skip: isKeysetMode ? undefined : options?.offset,
+    take: isKeysetMode ? options.limit : options?.length,
   })
-}
-
-export async function getGroupExpenseCount(groupId: string) {
-  return prisma.expense.count({ where: { groupId } })
 }
 
 export async function getExpense(groupId: string, expenseId: string) {

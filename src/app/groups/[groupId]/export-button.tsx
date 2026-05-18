@@ -1,7 +1,6 @@
 'use client'
 
 import { useCurrentGroup } from '@/app/groups/[groupId]/current-group-context'
-import { useEncryption } from '@/components/encryption-provider'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -10,14 +9,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useToast } from '@/components/ui/use-toast'
-import { decryptExpenses } from '@/lib/encrypt-helpers'
 import {
   buildCsvFromGroup,
   buildJsonFromGroup,
   type ExportExpense,
   type ExportGroup,
 } from '@/lib/export'
-import { trpc } from '@/trpc/client'
+import { useAllGroupExpenses } from '@/lib/hooks'
 import { Download, FileDown, FileJson } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useState } from 'react'
@@ -37,38 +35,31 @@ function downloadBlob(content: string, filename: string, mimeType: string) {
 export default function ExportButton({ groupId }: { groupId: string }) {
   const t = useTranslations('Expenses')
   const { toast } = useToast()
-  const { encryptionKey, hasKey } = useEncryption()
   const currentGroup = useCurrentGroup()
   const [isExporting, setIsExporting] = useState(false)
 
-  const { data: expensesData } = trpc.groups.expenses.listAll.useQuery({
-    groupId,
+  // enabled:false + autoDrain:false — no fetch happens on render. The full
+  // drain runs only when the user clicks an export item (Issue #170).
+  const { fetchAll } = useAllGroupExpenses(groupId, {
+    enabled: false,
+    autoDrain: false,
   })
 
   async function handleExport(format: 'csv' | 'json') {
-    if (currentGroup.isLoading || !expensesData?.expenses) {
+    if (currentGroup.isLoading) {
       toast({
         description: 'Export data is not ready yet. Please try again shortly.',
         variant: 'destructive',
       })
       return
     }
-    if (expensesData.totalCount > expensesData.expenses.length) {
-      // Refuse partial export — listAll caps at MAX_EXPENSES_LIMIT (10,000).
-      // Cursor pagination for very large groups is tracked in #170.
-      toast({
-        description: `Export aborted: this group has ${expensesData.totalCount} expenses, exceeding the client-side limit of ${expensesData.expenses.length}.`,
-        variant: 'destructive',
-      })
-      return
-    }
     setIsExporting(true)
     try {
+      // Use the RETURN VALUE of fetchAll (not the hook's React state) so this
+      // closure cannot read a stale `expenses` snapshot.
+      const decrypted = await fetchAll()
       const group = currentGroup.group as unknown as ExportGroup
-      const rawExpenses = expensesData.expenses
-      const expenses = (hasKey && encryptionKey
-        ? await decryptExpenses(rawExpenses, encryptionKey)
-        : rawExpenses) as unknown as ExportExpense[]
+      const expenses = decrypted as unknown as ExportExpense[]
       const date = new Date().toISOString().split('T')[0]
       const filenameBase = `Spliit Export - ${group.name} - ${date}`
       if (format === 'csv') {
@@ -82,7 +73,10 @@ export default function ExportButton({ groupId }: { groupId: string }) {
     } catch (error) {
       console.error('Export failed:', error)
       toast({
-        description: 'Export failed. Please try again.',
+        description:
+          error instanceof Error && error.message
+            ? `Export failed: ${error.message}`
+            : 'Export failed. Please try again.',
         variant: 'destructive',
       })
     } finally {

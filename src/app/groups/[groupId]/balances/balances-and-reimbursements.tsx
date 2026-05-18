@@ -29,6 +29,7 @@ export default function BalancesAndReimbursements() {
     balances,
     reimbursements,
     isLoading: balancesAreLoading,
+    queryError,
     decryptionError,
   } = useBalances(groupId)
 
@@ -42,6 +43,18 @@ export default function BalancesAndReimbursements() {
 
   const isLoading = balancesAreLoading || !group
 
+  // Issue #170: Surface query (network/server) errors separately from
+  // decryption errors so the user can tell apart "can't reach server" from
+  // "wrong encryption key".
+  if (queryError) {
+    return (
+      <Alert variant="destructive" className="mb-4">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>{t('queryError.title')}</AlertTitle>
+        <AlertDescription>{t('queryError.description')}</AlertDescription>
+      </Alert>
+    )
+  }
   // Issue #80: Show error if decryption failed
   if (decryptionError) {
     return (
