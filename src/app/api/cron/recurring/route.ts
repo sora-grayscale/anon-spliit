@@ -6,11 +6,11 @@ import { NextRequest, NextResponse } from 'next/server'
 /**
  * Cron endpoint for processing recurring expense generation across all groups.
  *
- * Previously, `createRecurringExpenses` was invoked on every `getGroupExpenses`
- * call without a groupId filter, meaning any unauthenticated list of any group
- * triggered work for the entire instance (Issue #132). The list path now scopes
- * to the requested group only; this endpoint handles full-fleet processing for
- * groups that are not actively browsed.
+ * Read paths (e.g. `getGroupExpenses`) no longer trigger recurring
+ * generation (Issue #169); this endpoint is the sole materializer of
+ * pending recurring expenses. Reflection of new recurring expenses
+ * therefore depends on the cron schedule defined in `vercel.json`
+ * (`0 2 * * *` — daily 02:00 UTC).
  *
  * Authentication: requires CRON_SECRET in the Authorization header.
  * Usage: curl -X POST -H "Authorization: Bearer $CRON_SECRET" /api/cron/recurring

@@ -525,6 +525,19 @@ describe('API data access layer', () => {
     })
   })
 
+  describe('getGroupExpenses', () => {
+    it('does not trigger recurring expense generation (Issue #169)', async () => {
+      ;(mockRecurringExpenseLink.findMany as jest.Mock).mockResolvedValue([])
+      ;(mockExpense.findMany as jest.Mock).mockResolvedValue([])
+      const mock$transaction = prisma.$transaction as jest.Mock
+
+      await getGroupExpenses('g1')
+
+      expect(mockRecurringExpenseLink.findMany).not.toHaveBeenCalled()
+      expect(mock$transaction).not.toHaveBeenCalled()
+    })
+  })
+
   describe('createRecurringExpenses', () => {
     it('skips links whose group is soft-deleted (Issue #141)', async () => {
       ;(mockRecurringExpenseLink.findMany as jest.Mock).mockResolvedValue([])

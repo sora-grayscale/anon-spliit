@@ -426,11 +426,6 @@ export async function getGroupExpenses(
   groupId: string,
   options?: { offset?: number; length?: number },
 ) {
-  // Process only this group's recurring links to avoid cross-tenant DoS via
-  // unauthenticated list calls (Issue #132). Full-fleet processing lives in
-  // the dedicated /api/cron/recurring endpoint for self-hosted setups.
-  await createRecurringExpenses(groupId)
-
   // Server-side title filtering removed (Issue #164): `title` is E2EE
   // ciphertext, so SQL LIKE/ILIKE on it can never match user-typed plaintext
   // and would leak the search term to server logs. Search is now performed
