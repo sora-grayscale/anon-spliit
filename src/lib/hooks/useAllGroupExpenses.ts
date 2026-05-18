@@ -223,6 +223,23 @@ export function useAllGroupExpenses(
     }
   }, [autoDrain, resetKey])
 
+  // Render-time identity guard. Both reset useEffects above run AFTER paint,
+  // so without this check `rerender({ groupId: 'g2' })` would briefly expose
+  // group g1's decrypted balances on g2's screen — unacceptable for an E2EE
+  // fork (Codex iter2 Medium #3). resetKeyRef starts as '' so the very first
+  // render also matches this branch and returns the safe no-data shape.
+  const identityIsCurrent = resetKeyRef.current === resetKey
+  if (!identityIsCurrent) {
+    return {
+      expenses: undefined,
+      isLoading: true,
+      isFetchingNextPage: false,
+      queryError: null,
+      decryptionError: null,
+      fetchAll,
+    }
+  }
+
   // In autoDrain mode the drain `useEffect` only schedules `fetchAll` after
   // the first paint, so without the no-data clause `isLoading` would briefly
   // be `false` while `expenses === undefined`, exposing a "zero balances /

@@ -288,6 +288,48 @@ describe('useAllGroupExpenses (Issue #170)', () => {
       expect(result.current.isLoading).toBe(true)
     })
 
+    it('does NOT expose old groups expenses for the 1 render after groupId changes (Codex iter2 Medium #3)', async () => {
+      withKey()
+      mockListAllFetch.mockResolvedValueOnce(
+        makePage([{ id: 'old-1', title: 't', amount: '1' }], null),
+      )
+      const { result, rerender } = renderHook(
+        ({ groupId }) => useAllGroupExpenses(groupId),
+        { initialProps: { groupId: 'g1' } },
+      )
+      await waitFor(() => expect(result.current.isLoading).toBe(false))
+      expect(result.current.expenses).toEqual([
+        { id: 'old-1', title: 't', amount: '1' },
+      ])
+
+      // Switch to a new group. The next render must NOT expose g1's
+      // decrypted data — the reset useEffect only fires AFTER paint, so
+      // a render-time guard is required.
+      mockListAllFetch.mockImplementation(() => new Promise(() => {}))
+      rerender({ groupId: 'g2' })
+      // Synchronously after rerender — no waitFor, no act flush.
+      expect(result.current.expenses).toBeUndefined()
+      expect(result.current.isLoading).toBe(true)
+    })
+
+    it('does NOT expose old keys expenses for the 1 render after encryption key changes (Codex iter2 Medium #3)', async () => {
+      withKey(ENCRYPTED_KEY)
+      mockListAllFetch.mockResolvedValueOnce(
+        makePage([{ id: 'enc-old', title: 't', amount: '1' }], null),
+      )
+      const { result, rerender } = renderHook(() => useAllGroupExpenses('g1'))
+      await waitFor(() => expect(result.current.isLoading).toBe(false))
+      expect(result.current.expenses).toHaveLength(1)
+
+      // Switch the encryption key the provider returns.
+      withKey(ENCRYPTED_KEY_2)
+      mockListAllFetch.mockImplementation(() => new Promise(() => {}))
+      rerender()
+      // Synchronously after rerender — no waitFor, no act flush.
+      expect(result.current.expenses).toBeUndefined()
+      expect(result.current.isLoading).toBe(true)
+    })
+
     it('passes staleTime: 0 to every page fetch to bypass the React Query cache (Codex iter1 Medium #2)', async () => {
       withKey()
       mockListAllFetch
