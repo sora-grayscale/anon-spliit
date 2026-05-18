@@ -93,6 +93,22 @@ Visit [http://localhost:3000](http://localhost:3000)
 | `NEXT_PUBLIC_BASE_URL` | `http://localhost:3000` | Base URL for the app |
 | `NEXT_PUBLIC_DEFAULT_CURRENCY_CODE` | - | Default currency code |
 
+## Cron Jobs (Self-Hosted)
+
+Vercel users have cron handled by `vercel.json`. Self-hosted setups (e.g. `compose.yaml`) need to schedule the cron endpoints externally:
+
+- `POST /api/cron/recurring` — materializes due recurring expenses. Read paths no longer trigger materialization (Issue #169), so this endpoint is the **only** way recurring expenses are generated.
+- `POST /api/cron/auto-delete` — marks inactive groups for deletion.
+
+Both require `Authorization: Bearer $CRON_SECRET`. Example with system cron:
+
+```cron
+0 2 * * * curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/recurring
+0 3 * * * curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/auto-delete
+```
+
+Without scheduling these, recurring expenses will not be materialized.
+
 ## Common Commands
 
 ```bash
