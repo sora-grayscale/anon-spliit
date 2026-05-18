@@ -43,8 +43,16 @@ export function CreateExpenseForm({
           expenseFormValues: dataToSend,
           participantId,
         })
-        utils.groups.expenses.invalidate()
-        router.push(`/groups/${group.id}`)
+        try {
+          await utils.groups.expenses.invalidate()
+        } catch (error) {
+          // The mutation already succeeded server-side; we still need to
+          // navigate so the user is not stuck on the form. The stale cache
+          // will be refreshed on the next interaction.
+          console.warn('Failed to invalidate expenses cache:', error)
+        } finally {
+          router.push(`/groups/${group.id}`)
+        }
       }}
     />
   )

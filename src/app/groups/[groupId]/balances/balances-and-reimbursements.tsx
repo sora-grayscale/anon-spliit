@@ -13,18 +13,20 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { useBalances } from '@/lib/hooks/useBalances'
 import { getCurrencyFromGroup } from '@/lib/utils'
-import { trpc } from '@/trpc/client'
 import { AlertCircle } from 'lucide-react'
 import { useTranslations } from 'next-intl'
-import { Fragment, useEffect } from 'react'
+import { Fragment } from 'react'
 import { match } from 'ts-pattern'
 import { useCurrentGroup } from '../current-group-context'
 
 export default function BalancesAndReimbursements() {
-  const utils = trpc.useUtils()
   const { groupId, group } = useCurrentGroup()
 
-  // Use client-side balance calculation (supports encrypted amounts)
+  // Use client-side balance calculation (supports encrypted amounts).
+  // Issue #172: no mount-time invalidate. Mutations (create/update/delete)
+  // already invalidate the expenses cache on success. The full-drain on
+  // every mount is tracked separately as a freshness-safe cache design
+  // (Issue #225).
   const {
     balances,
     reimbursements,
@@ -34,12 +36,6 @@ export default function BalancesAndReimbursements() {
   } = useBalances(groupId)
 
   const t = useTranslations('Balances')
-
-  useEffect(() => {
-    // Until we use tRPC more widely and can invalidate the cache on expense
-    // update, it's easier and safer to invalidate the cache on page load.
-    utils.groups.expenses.invalidate()
-  }, [utils])
 
   const isLoading = balancesAreLoading || !group
 

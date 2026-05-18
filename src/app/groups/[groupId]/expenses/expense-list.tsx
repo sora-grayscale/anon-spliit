@@ -12,7 +12,7 @@ import { trpc } from '@/trpc/client'
 import dayjs, { type Dayjs } from 'dayjs'
 import { useTranslations } from 'next-intl'
 import Link from 'next/link'
-import { forwardRef, useEffect, useMemo, useRef, useState } from 'react'
+import { forwardRef, useEffect, useMemo, useState } from 'react'
 import { useInView } from 'react-intersection-observer'
 import { useDebounce } from 'use-debounce'
 import { useCurrentGroup } from '../current-group-context'
@@ -105,15 +105,8 @@ const ExpenseListForSearch = ({
   groupId: string
   searchText: string
 }) => {
-  const utils = trpc.useUtils()
   const { group } = useCurrentGroup()
   const { encryptionKey, isLoading: isKeyLoading, hasKey } = useEncryption()
-
-  useEffect(() => {
-    // Until we use tRPC more widely and can invalidate the cache on expense
-    // update, it's easier and safer to invalidate the cache on page load.
-    utils.groups.expenses.invalidate()
-  }, [utils])
 
   const t = useTranslations('Expenses')
   const { ref: loadingRef, inView } = useInView()
@@ -152,26 +145,17 @@ const ExpenseListForSearch = ({
     return rawExpenses
   }, [rawExpenses, encryptionKey, isKeyLoading, hasKey])
 
-  // Handle async decryption
+  // Handle async decryption. We rely on the useEffect dep array (rawExpenses,
+  // encryptionKey, isKeyLoading, hasKey) to trigger re-decrypt only when one
+  // of those actually changes — react-query returns a new `rawExpenses`
+  // reference whenever the underlying page set changes, so refetch after a
+  // cross-tab edit re-decrypts (Issue #171). The isMounted cleanup prevents
+  // a late async setState after unmount (Issue #53).
   const [decryptedExpenses, setDecryptedExpenses] =
     useState<typeof rawExpenses>(undefined)
-  const lastDecryptedRef = useRef<{ key: string; withKey: boolean } | null>(
-    null,
-  )
 
   useEffect(() => {
-    let isMounted = true // Track if component is still mounted (Issue #53)
-
-    const expenseIds = rawExpenses?.map((e) => e.id).join(',') || ''
-    const shouldDecryptWithKey = hasKey && encryptionKey !== null
-
-    // Skip if already processed with same state
-    if (
-      lastDecryptedRef.current?.key === expenseIds &&
-      lastDecryptedRef.current?.withKey === shouldDecryptWithKey
-    ) {
-      return
-    }
+    let isMounted = true
 
     async function decrypt() {
       if (!rawExpenses) {
@@ -181,10 +165,7 @@ const ExpenseListForSearch = ({
 
       // If no encryption key, use original data
       if (!isKeyLoading && !hasKey) {
-        if (isMounted) {
-          setDecryptedExpenses(rawExpenses)
-          lastDecryptedRef.current = { key: expenseIds, withKey: false }
-        }
+        if (isMounted) setDecryptedExpenses(rawExpenses)
         return
       }
 
@@ -194,16 +175,10 @@ const ExpenseListForSearch = ({
 
       try {
         const decrypted = await decryptExpenses(rawExpenses, encryptionKey)
-        if (isMounted) {
-          setDecryptedExpenses(decrypted)
-          lastDecryptedRef.current = { key: expenseIds, withKey: true }
-        }
+        if (isMounted) setDecryptedExpenses(decrypted)
       } catch (error) {
         console.warn('Failed to decrypt expenses:', error)
-        if (isMounted) {
-          setDecryptedExpenses(rawExpenses)
-          lastDecryptedRef.current = { key: expenseIds, withKey: true }
-        }
+        if (isMounted) setDecryptedExpenses(rawExpenses)
       }
     }
 
