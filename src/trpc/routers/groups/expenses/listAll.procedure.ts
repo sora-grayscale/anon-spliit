@@ -29,13 +29,6 @@ export const listAllGroupExpensesProcedure = publicProcedure
     }),
   )
   .query(async ({ input: { groupId, limit } }) => {
-    // getGroupExpenses internally materializes any due recurring
-    // expenses (src/lib/api.ts:432, batched at MAX_BATCH_SIZE so a
-    // backlog may still carry over). Read totalCount strictly AFTER it
-    // returns so the count reflects the same row set as the slice —
-    // otherwise the count could be observed before the batch is
-    // inserted, defeating the truncation guard the export flow relies
-    // on (Issue #131).
     const expenses = await getGroupExpenses(groupId, { length: limit })
     const totalCount = await getGroupExpenseCount(groupId)
     return {

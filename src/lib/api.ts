@@ -426,11 +426,6 @@ export async function getGroupExpenses(
   groupId: string,
   options?: { offset?: number; length?: number },
 ) {
-  // Process only this group's recurring links to avoid cross-tenant DoS via
-  // unauthenticated list calls (Issue #132). Full-fleet processing lives in
-  // the dedicated /api/cron/recurring endpoint for self-hosted setups.
-  await createRecurringExpenses(groupId)
-
   // Server-side title filtering removed (Issue #164): `title` is E2EE
   // ciphertext, so SQL LIKE/ILIKE on it can never match user-typed plaintext
   // and would leak the search term to server logs. Search is now performed
@@ -540,11 +535,12 @@ export const MAX_GENERATIONS_PER_RUN = 100
  * Process pending recurring expense links and materialize the missed expenses.
  *
  * @param groupId - When provided, only links whose `currentFrameExpense`
- *   belongs to this group are processed. This is the path used by
- *   `getGroupExpenses` so an unauthenticated read on one group cannot
- *   trigger work for the entire instance (Issue #132).
- *   When omitted, all eligible links are processed; this mode is intended
- *   for the cron endpoint at `/api/cron/recurring`.
+ *   belongs to this group are processed. Originally added so the
+ *   `getGroupExpenses` read path could scope fan-out to a single tenant
+ *   (Issue #132); read paths no longer invoke this function since Issue
+ *   #169, so this mode is now only available for ad-hoc invocation.
+ *   When omitted, all eligible links are processed; this is the mode
+ *   used by the cron endpoint at `/api/cron/recurring`.
  */
 export async function createRecurringExpenses(groupId?: string) {
   const localDate = new Date() // Current local date
