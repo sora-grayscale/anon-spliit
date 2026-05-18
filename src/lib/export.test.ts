@@ -190,4 +190,32 @@ describe('buildJsonFromGroup', () => {
     }
     expect(parsed.expenses[0].notes).toBe('Decrypted memo text')
   })
+
+  test('does not leak runtime-only group fields (information, passwordSalt, etc.)', () => {
+    const groupWithExtras = {
+      ...baseGroup,
+      information: 'private memo',
+      passwordSalt: 'salt-bytes',
+      passwordHint: 'hint text',
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      deletedAt: null,
+    } as unknown as ExportGroup
+    const json = buildJsonFromGroup(groupWithExtras, [makeExpense()])
+    const parsed = JSON.parse(json) as Record<string, unknown>
+    expect(Object.keys(parsed).sort()).toEqual(
+      [
+        'currency',
+        'currencyCode',
+        'expenses',
+        'id',
+        'name',
+        'participants',
+      ].sort(),
+    )
+    expect(parsed).not.toHaveProperty('information')
+    expect(parsed).not.toHaveProperty('passwordSalt')
+    expect(parsed).not.toHaveProperty('passwordHint')
+    expect(parsed).not.toHaveProperty('createdAt')
+    expect(parsed).not.toHaveProperty('deletedAt')
+  })
 })

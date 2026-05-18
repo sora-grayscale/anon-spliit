@@ -154,5 +154,20 @@ export function buildJsonFromGroup(
   group: ExportGroup,
   expenses: ExportExpense[],
 ): string {
-  return JSON.stringify({ ...group, expenses }, null, 2)
+  // Whitelist fields explicitly: callers cast a wider runtime object
+  // (passwordSalt, passwordHint, information, createdAt, deletedAt, …)
+  // into ExportGroup, and spreading would otherwise leak those into
+  // the exported JSON.
+  return JSON.stringify(
+    {
+      id: group.id,
+      name: group.name,
+      currency: group.currency,
+      currencyCode: group.currencyCode,
+      participants: group.participants,
+      expenses,
+    },
+    null,
+    2,
+  )
 }

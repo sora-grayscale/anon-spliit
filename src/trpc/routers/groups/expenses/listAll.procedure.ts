@@ -1,4 +1,8 @@
-import { getGroupExpenseCount, getGroupExpenses } from '@/lib/api'
+import {
+  createRecurringExpenses,
+  getGroupExpenseCount,
+  getGroupExpenses,
+} from '@/lib/api'
 import { publicProcedure } from '@/trpc/init'
 import { z } from 'zod'
 
@@ -29,6 +33,13 @@ export const listAllGroupExpensesProcedure = publicProcedure
     }),
   )
   .query(async ({ input: { groupId, limit } }) => {
+    // Materialize any due recurring expenses BEFORE reading either the
+    // slice or the total count. getGroupExpenses runs this internally,
+    // but doing it once up front guarantees that the slice and count
+    // observe the same row set — otherwise the count could be read
+    // before recurring generation and undercount, defeating the
+    // truncation check the export flow relies on (Issue #131).
+    await createRecurringExpenses(groupId)
     const [expenses, totalCount] = await Promise.all([
       getGroupExpenses(groupId, { length: limit }),
       getGroupExpenseCount(groupId),
