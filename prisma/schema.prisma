@@ -26,6 +26,12 @@ model Group {
   passwordSalt String?       // Salt for PBKDF2 key derivation (base64 encoded)
   passwordHint String?       // Encrypted password hint
 
+  // Issue #225: bumped in the same transaction as any mutation that affects
+  // the listAll payload (expense CRUD, recurring expense creation, group
+  // participant changes). The client uses this to decide whether its
+  // decrypted-aggregate cache is still fresh.
+  expensesRevision Int @default(0)
+
   // Indexes for performance
   @@index([createdAt])  // For auto-delete inactive groups query
   @@index([deletedAt])  // For grace period cleanup query

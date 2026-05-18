@@ -74,6 +74,12 @@ export async function createExpense(
       },
     })
 
+    // Issue #225: bump aggregate-cache revision in the same transaction.
+    await tx.group.update({
+      where: { id: groupId },
+      data: { expensesRevision: { increment: 1 } },
+    })
+
     return tx.expense.create({
       data: {
         id: expenseId,
@@ -140,6 +146,12 @@ export async function deleteExpense(
     await tx.expense.delete({
       where: { id: expenseId },
       include: { paidFor: true, paidBy: true },
+    })
+
+    // Issue #225: bump aggregate-cache revision in the same transaction.
+    await tx.group.update({
+      where: { id: groupId },
+      data: { expensesRevision: { increment: 1 } },
     })
   })
 }
@@ -227,6 +239,12 @@ export async function updateExpense(
         expenseId,
         data: expenseFormValues.title,
       },
+    })
+
+    // Issue #225: bump aggregate-cache revision in the same transaction.
+    await tx.group.update({
+      where: { id: groupId },
+      data: { expensesRevision: { increment: 1 } },
     })
 
     return tx.expense.update({
@@ -386,6 +404,9 @@ export async function updateGroup(
       information: groupFormValues.information,
       currency: groupFormValues.currency,
       currencyCode: groupFormValues.currencyCode,
+      // Issue #225: participant rename affects paidBy.name / paidFor.participant.name
+      // in the listAll payload, so bump revision unconditionally on updateGroup.
+      expensesRevision: { increment: 1 },
       participants: {
         deleteMany: existingGroup.participants.filter(
           (p) => !groupFormValues.participants.some((p2) => p2.id === p.id),
@@ -737,6 +758,12 @@ export async function createRecurringExpenses(groupId?: string) {
             data: {
               nextExpenseCreatedAt: newExpense.createdAt,
             },
+          })
+
+          // Issue #225: bump aggregate-cache revision in the same transaction.
+          await transaction.group.update({
+            where: { id: currentExpenseRecord.groupId },
+            data: { expensesRevision: { increment: 1 } },
           })
 
           return newExpense

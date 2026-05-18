@@ -56,8 +56,10 @@ export default function ExportButton({ groupId }: { groupId: string }) {
     setIsExporting(true)
     try {
       // Use the RETURN VALUE of fetchAll (not the hook's React state) so this
-      // closure cannot read a stale `expenses` snapshot.
-      const decrypted = await fetchAll()
+      // closure cannot read a stale `expenses` snapshot. `forceFresh` bypasses
+      // the L2 decrypted-aggregate cache — race detection (revBefore/revAfter)
+      // still runs so a partial-snapshot CSV/JSON cannot ship (Issue #225).
+      const decrypted = await fetchAll({ forceFresh: true })
       const group = currentGroup.group as unknown as ExportGroup
       const expenses = decrypted as unknown as ExportExpense[]
       const date = new Date().toISOString().split('T')[0]

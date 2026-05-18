@@ -2,6 +2,11 @@
 
 import { useEncryption } from '@/components/encryption-provider'
 import { decryptExpenses } from '@/lib/encrypt-helpers'
+import {
+  computeFingerprint,
+  getAggregate,
+  setAggregate,
+} from '@/lib/hooks/aggregateCache'
 import { trpc } from '@/trpc/client'
 import { AppRouterOutput } from '@/trpc/routers/_app'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -11,6 +16,19 @@ const PAGE_SIZE = 200
 type ListAllPage = AppRouterOutput['groups']['expenses']['listAll']
 type Cursor = NonNullable<ListAllPage['nextCursor']>
 export type GroupExpense = ListAllPage['expenses'][number]
+
+/**
+ * Internal sentinel error used to abandon a drain whose epoch / identity
+ * has been superseded. Caught and suppressed by the autoDrain useEffect;
+ * imperative callers (e.g. export) see a normal Error and surface it via
+ * their own catch path.
+ */
+class StaleDrainError extends Error {
+  constructor() {
+    super('Stale drain abandoned')
+    this.name = 'StaleDrainError'
+  }
+}
 
 export interface UseAllGroupExpensesOptions {
   /**
@@ -46,11 +64,18 @@ export interface UseAllGroupExpensesResult {
   decryptionError: Error | null
   /**
    * Imperative drain. Returns the fully decrypted array on success;
-   * throws on either fetch or decryption failure. Callers must use the
-   * return value (NOT the hook `expenses` state) to avoid reading stale
-   * React state inside the same closure.
+   * throws on fetch / decryption failure, on revision-fetch failure, or
+   * after two consecutive concurrent-mutation races.
+   *
+   * Pass `{ forceFresh: true }` to bypass the L2 decrypted-aggregate cache
+   * (both get and set). Race detection — revBefore / revAfter comparison
+   * with one retry — still runs to keep cursor-paginated drains internally
+   * consistent.
+   *
+   * Callers must use the return value (NOT the hook `expenses` state) to
+   * avoid reading stale React state inside the same closure.
    */
-  fetchAll: () => Promise<GroupExpense[]>
+  fetchAll: (opts?: { forceFresh?: boolean }) => Promise<GroupExpense[]>
 }
 
 /**
@@ -124,74 +149,151 @@ export function useAllGroupExpenses(
     [encryptionKey, hasKey, isKeyLoading],
   )
 
-  const fetchAll = useCallback(async (): Promise<GroupExpense[]> => {
-    const myEpoch = ++epochRef.current
-    const isCurrent = () => isMountedRef.current && myEpoch === epochRef.current
+  const fetchAll = useCallback(
+    async (fetchOpts?: { forceFresh?: boolean }): Promise<GroupExpense[]> => {
+      const myEpoch = ++epochRef.current
+      const isCurrent = () =>
+        isMountedRef.current &&
+        myEpoch === epochRef.current &&
+        resetKeyRef.current === resetKey
+      const ensureCurrent = () => {
+        if (!isCurrent()) throw new StaleDrainError()
+      }
 
-    if (isKeyLoading) {
-      const err = new Error('Encryption key is still loading')
-      if (isCurrent()) setQueryError(err)
-      throw err
-    }
+      if (isKeyLoading) {
+        const err = new Error('Encryption key is still loading')
+        if (isCurrent()) setQueryError(err)
+        throw err
+      }
 
-    if (isCurrent()) {
-      setIsWorking(true)
-      setQueryError(null)
-      setDecryptionError(null)
-    }
+      if (isCurrent()) {
+        setIsWorking(true)
+        setQueryError(null)
+        setDecryptionError(null)
+      }
 
-    const accumulated: GroupExpense[] = []
-    let cursor: Cursor | undefined = undefined
+      const drainLoop = async (): Promise<GroupExpense[]> => {
+        const accumulated: GroupExpense[] = []
+        let cursor: Cursor | undefined = undefined
+        while (true) {
+          if (isCurrent()) setIsFetchingNextPage(true)
+          let page: ListAllPage
+          try {
+            // staleTime: 0 forces a network fetch on every page. The
+            // default query-client staleTime would otherwise let a cached
+            // page slip into the drain mid-flight and break the
+            // revBefore / revAfter race-detection contract.
+            page = await utils.groups.expenses.listAll.fetch(
+              { groupId, limit: PAGE_SIZE, cursor },
+              { staleTime: 0 },
+            )
+          } catch (err) {
+            const error = err instanceof Error ? err : new Error(String(err))
+            if (isCurrent()) setQueryError(error)
+            throw error
+          } finally {
+            if (isCurrent()) setIsFetchingNextPage(false)
+          }
+          ensureCurrent()
 
-    try {
-      while (true) {
-        if (isCurrent()) setIsFetchingNextPage(true)
-        let page: ListAllPage
+          let decryptedPage: GroupExpense[]
+          try {
+            decryptedPage = await decryptPage(page.expenses)
+          } catch (err) {
+            const error = err instanceof Error ? err : new Error(String(err))
+            if (isCurrent()) setDecryptionError(error)
+            // CRITICAL (Issue #80): never push encrypted ciphertext into
+            // `accumulated`. Re-throw so imperative callers (export) also
+            // fail closed and never receive encrypted data.
+            throw error
+          }
+          ensureCurrent()
+
+          accumulated.push(...decryptedPage)
+          if (!page.nextCursor) break
+          cursor = page.nextCursor
+        }
+        return accumulated
+      }
+
+      const fetchRevision = async (): Promise<number> => {
         try {
-          // staleTime: 0 forces a network fetch on every page. The default
-          // query-client staleTime (30s) would otherwise let an invalidate()
-          // be raced by a cached-response read, or let a quick re-visit serve
-          // stale balances/export after a cross-device update.
-          page = await utils.groups.expenses.listAll.fetch(
-            {
-              groupId,
-              limit: PAGE_SIZE,
-              cursor,
-            },
+          const { revision } = await utils.groups.expenses.revision.fetch(
+            { groupId },
             { staleTime: 0 },
           )
+          return revision
         } catch (err) {
           const error = err instanceof Error ? err : new Error(String(err))
           if (isCurrent()) setQueryError(error)
-          throw error
-        } finally {
-          if (isCurrent()) setIsFetchingNextPage(false)
-        }
-
-        let decryptedPage: GroupExpense[]
-        try {
-          decryptedPage = await decryptPage(page.expenses)
-        } catch (err) {
-          const error = err instanceof Error ? err : new Error(String(err))
-          if (isCurrent()) setDecryptionError(error)
-          // CRITICAL (Issue #80): do NOT push encrypted ciphertext into
-          // `accumulated`. Re-throw so the imperative caller (e.g. export)
-          // also fails closed and never receives encrypted data.
+          // Fail closed: never serve a cached aggregate when we cannot
+          // confirm freshness from the server-truth revision counter.
           throw error
         }
-
-        accumulated.push(...decryptedPage)
-
-        if (!page.nextCursor) break
-        cursor = page.nextCursor
       }
 
-      if (isCurrent()) setExpenses(accumulated)
-      return accumulated
-    } finally {
-      if (isCurrent()) setIsWorking(false)
-    }
-  }, [decryptPage, groupId, isKeyLoading, utils])
+      try {
+        const fingerprint = await computeFingerprint(
+          encryptionKey ?? null,
+          hasKey,
+        )
+        ensureCurrent()
+
+        if (!fetchOpts?.forceFresh) {
+          const currentRev = await fetchRevision()
+          ensureCurrent()
+          const cached = getAggregate(groupId, fingerprint, currentRev)
+          if (cached) {
+            if (isCurrent()) setExpenses(cached)
+            return cached
+          }
+        }
+
+        // Drain with race detection (max 2 attempts). forceFresh keeps
+        // race detection on so cursor pagination cannot stitch a snapshot
+        // across mutations — partial-snapshot CSV/JSON exports were the
+        // motivating concern.
+        let raceErr: Error | null = null
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const revBefore = await fetchRevision()
+          ensureCurrent()
+          const accumulated = await drainLoop()
+          ensureCurrent()
+          const revAfter = await fetchRevision()
+          ensureCurrent()
+
+          if (revBefore === revAfter) {
+            if (!fetchOpts?.forceFresh) {
+              setAggregate(groupId, fingerprint, revAfter, accumulated)
+            }
+            if (isCurrent()) setExpenses(accumulated)
+            return accumulated
+          }
+          raceErr = new Error(
+            `Concurrent mutation during drain (attempt ${attempt + 1})`,
+          )
+        }
+
+        // Two consecutive races — fail closed. setExpenses is intentionally
+        // NOT called so a stale snapshot never reaches the UI; queryError
+        // flips isLoading to false and consumers render their error state.
+        const err = raceErr ?? new Error('Concurrent mutations during drain')
+        if (isCurrent()) setQueryError(err)
+        throw err
+      } finally {
+        if (isCurrent()) setIsWorking(false)
+      }
+    },
+    [
+      decryptPage,
+      encryptionKey,
+      groupId,
+      hasKey,
+      isKeyLoading,
+      resetKey,
+      utils,
+    ],
+  )
 
   // autoDrain path: kick off a full drain whenever the (groupId, key) identity
   // changes. Stale drains are abandoned via the epoch check inside fetchAll.
@@ -206,7 +308,8 @@ export function useAllGroupExpenses(
       setDecryptionError(null)
     }
 
-    void fetchAll().catch(() => {
+    void fetchAll().catch((err) => {
+      if (err instanceof StaleDrainError) return
       // queryError / decryptionError are already populated inside fetchAll.
     })
   }, [enabled, autoDrain, isKeyLoading, resetKey, fetchAll])
