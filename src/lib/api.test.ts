@@ -51,7 +51,6 @@ import {
   getCategories,
   getExpense,
   getGroup,
-  getGroupExpenseCount,
   getGroupExpenses,
   getGroups,
   logActivity,
@@ -371,7 +370,13 @@ describe('API data access layer', () => {
       expect(mockExpense.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { groupId: 'group-1', title: undefined },
-          orderBy: [{ expenseDate: 'desc' }, { createdAt: 'desc' }],
+          // `id` DESC is the stable tie-breaker required by the cursor
+          // contract introduced in Issue #170.
+          orderBy: [
+            { expenseDate: 'desc' },
+            { createdAt: 'desc' },
+            { id: 'desc' },
+          ],
         }),
       )
     })
@@ -405,17 +410,59 @@ describe('API data access layer', () => {
         }),
       )
     })
-  })
 
-  describe('getGroupExpenseCount', () => {
-    it('should return expense count for a group', async () => {
-      ;(mockExpense.count as jest.Mock).mockResolvedValue(5)
+    describe('cursor pagination (Issue #170)', () => {
+      it('emits 3-step keyset WHERE OR clause when cursor is provided', async () => {
+        ;(mockExpense.findMany as jest.Mock).mockResolvedValue([])
+        const expenseDate = new Date('2026-05-10T12:00:00.000Z')
+        const createdAt = new Date('2026-05-10T11:00:00.000Z')
+        await getGroupExpenses('g1', {
+          cursor: { expenseDate, createdAt, id: 'exp-1' },
+          limit: 100,
+        })
+        expect(mockExpense.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: {
+              groupId: 'g1',
+              OR: [
+                { expenseDate: { lt: expenseDate } },
+                { expenseDate, createdAt: { lt: createdAt } },
+                { expenseDate, createdAt, id: { lt: 'exp-1' } },
+              ],
+            },
+            take: 100,
+            skip: undefined,
+          }),
+        )
+      })
 
-      const result = await getGroupExpenseCount('group-1')
+      it('keeps offset/length path untouched when cursor is absent', async () => {
+        ;(mockExpense.findMany as jest.Mock).mockResolvedValue([])
+        await getGroupExpenses('g1', { offset: 5, length: 50 })
+        expect(mockExpense.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { groupId: 'g1' },
+            skip: 5,
+            take: 50,
+          }),
+        )
+      })
 
-      expect(result).toBe(5)
-      expect(mockExpense.count).toHaveBeenCalledWith({
-        where: { groupId: 'group-1' },
+      it('throws when offset and cursor are specified simultaneously', async () => {
+        // The type-level discriminated union blocks this, but a runtime guard
+        // backs it up as defence-in-depth. Cast to `never` to bypass typing.
+        await expect(
+          getGroupExpenses('g1', {
+            offset: 0,
+            length: 10,
+            cursor: {
+              expenseDate: new Date(),
+              createdAt: new Date(),
+              id: 'x',
+            },
+            limit: 100,
+          } as never),
+        ).rejects.toThrow(/simultaneously/)
       })
     })
   })

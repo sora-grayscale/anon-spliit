@@ -210,4 +210,5 @@ export function useEncryptionKey() {
 }
 
 // Re-export from hooks directory
+export { useAllGroupExpenses } from './hooks/useAllGroupExpenses'
 export { useBalances } from './hooks/useBalances'

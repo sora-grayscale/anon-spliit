@@ -277,6 +277,10 @@
       "title": "Unable to calculate balances",
       "description": "Could not decrypt expense data. Please check that you have the correct encryption key in your URL."
     },
+    "queryError": {
+      "title": "Unable to load expenses",
+      "description": "Could not fetch expense data from the server. Please try again."
+    },
     "Reimbursements": {
       "title": "Suggested reimbursements",
       "description": "Here are suggestions for optimized reimbursements between participants.",
