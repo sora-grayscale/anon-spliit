@@ -3,7 +3,7 @@ import { useEncryption } from '@/components/encryption-provider'
 import { decryptExpense, encryptExpenseFormValues } from '@/lib/encrypt-helpers'
 import { trpc } from '@/trpc/client'
 import { useRouter } from 'next/navigation'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useCurrentGroup } from '../current-group-context'
 import { ExpenseForm } from './expense-form'
 
@@ -28,24 +28,17 @@ export function EditExpenseForm({
 
   const { encryptionKey, isLoading: isKeyLoading, hasKey } = useEncryption()
 
+  // Decrypt the expense whenever the upstream tRPC query produces a new
+  // reference (e.g. after a cross-tab edit triggers a refetch). The dep array
+  // alone is enough — Issue #171's previous ID-only dedup was redundant and
+  // wrongly suppressed re-decrypt when the content changed for the same id.
+  // The isMounted cleanup prevents a late async setState after unmount
+  // (Issue #53).
   const [decryptedExpense, setDecryptedExpense] =
     useState<typeof expense>(undefined)
-  const lastDecryptedRef = useRef<{ id: string; withKey: boolean } | null>(null)
 
-  // Decrypt expense when data and key are available
   useEffect(() => {
-    let isMounted = true // Track if component is still mounted (Issue #53)
-
-    const shouldDecryptWithKey = hasKey && encryptionKey !== null
-
-    // Skip if already processed with same state
-    if (
-      expense?.id &&
-      lastDecryptedRef.current?.id === expense.id &&
-      lastDecryptedRef.current?.withKey === shouldDecryptWithKey
-    ) {
-      return
-    }
+    let isMounted = true
 
     async function decrypt() {
       if (!expense) {
@@ -55,10 +48,7 @@ export function EditExpenseForm({
 
       // If no encryption key, use original data
       if (!isKeyLoading && !hasKey) {
-        if (isMounted) {
-          setDecryptedExpense(expense)
-          lastDecryptedRef.current = { id: expense.id, withKey: false }
-        }
+        if (isMounted) setDecryptedExpense(expense)
         return
       }
 
@@ -68,16 +58,10 @@ export function EditExpenseForm({
 
       try {
         const decrypted = await decryptExpense(expense, encryptionKey)
-        if (isMounted) {
-          setDecryptedExpense(decrypted)
-          lastDecryptedRef.current = { id: expense.id, withKey: true }
-        }
+        if (isMounted) setDecryptedExpense(decrypted)
       } catch (error) {
         console.warn('Failed to decrypt expense:', error)
-        if (isMounted) {
-          setDecryptedExpense(expense)
-          lastDecryptedRef.current = { id: expense.id, withKey: true }
-        }
+        if (isMounted) setDecryptedExpense(expense)
       }
     }
 
@@ -86,7 +70,7 @@ export function EditExpenseForm({
     return () => {
       isMounted = false
     }
-  }, [expense?.id, encryptionKey, isKeyLoading, hasKey, expense])
+  }, [expense, encryptionKey, isKeyLoading, hasKey])
 
   const { mutateAsync: updateExpenseMutateAsync } =
     trpc.groups.expenses.update.useMutation()
@@ -115,8 +99,16 @@ export function EditExpenseForm({
           expenseFormValues: dataToSend,
           participantId,
         })
-        utils.groups.expenses.invalidate()
-        router.push(`/groups/${group.id}`)
+        try {
+          await utils.groups.expenses.invalidate()
+        } catch (error) {
+          // The mutation already succeeded server-side; we still need to
+          // navigate so the user is not stuck on the form. The stale cache
+          // will be refreshed on the next interaction.
+          console.warn('Failed to invalidate expenses cache:', error)
+        } finally {
+          router.push(`/groups/${group.id}`)
+        }
       }}
       onDelete={async (participantId) => {
         await deleteExpenseMutateAsync({
@@ -124,8 +116,13 @@ export function EditExpenseForm({
           groupId,
           participantId,
         })
-        utils.groups.expenses.invalidate()
-        router.push(`/groups/${group.id}`)
+        try {
+          await utils.groups.expenses.invalidate()
+        } catch (error) {
+          console.warn('Failed to invalidate expenses cache:', error)
+        } finally {
+          router.push(`/groups/${group.id}`)
+        }
       }}
     />
   )
