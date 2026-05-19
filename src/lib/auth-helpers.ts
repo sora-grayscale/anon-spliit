@@ -13,9 +13,11 @@ import { NextResponse } from 'next/server'
  * their password before performing other actions, or null otherwise.
  *
  * Mirrors the `mustChangePassword` check in publicProcedure / adminProcedure
- * (Issue #142). The change-password endpoint and the pre-auth 2FA verify
- * endpoint (which has no session) are intentionally exempt and should not
- * call this helper.
+ * (Issue #142). The change-password endpoint and the 2FA verify endpoint
+ * (`/api/2fa/verify`) are intentionally exempt and should not call this
+ * helper. The verify endpoint runs its own subject-bound pre-2FA gate
+ * (Issue #174); blocking on `mustChangePassword` would self-block users
+ * who must complete 2FA before reaching the change-password flow.
  */
 export function passwordChangeRequiredResponse(
   session: Session | null,
