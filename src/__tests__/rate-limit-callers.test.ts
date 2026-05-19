@@ -73,7 +73,9 @@ const mockedCheckRateLimitAsync = checkRateLimitAsync as jest.MockedFunction<
   typeof checkRateLimitAsync
 >
 
-function makeSession() {
+function makeSession({
+  requiresTwoFactor = false,
+}: { requiresTwoFactor?: boolean } = {}) {
   return {
     user: {
       id: 'u1',
@@ -81,7 +83,7 @@ function makeSession() {
       isAdmin: false,
       mustChangePassword: false,
       twoFactorEnabled: true,
-      requiresTwoFactor: false,
+      requiresTwoFactor,
     },
     expires: '2099-01-01T00:00:00.000Z',
   } as never
@@ -121,6 +123,10 @@ describe('rate-limit async callers (Issue #167)', () => {
   })
 
   it('POST /api/2fa/verify returns 429 from the async rate limit', async () => {
+    // After Issue #174 the verify endpoint gates on auth() + email match +
+    // requiresTwoFactor=true BEFORE the rate-limit check. Set up a session
+    // that passes those gates so we actually reach the rate-limit branch.
+    mockedAuth.mockResolvedValue(makeSession({ requiresTwoFactor: true }))
     mockedCheckRateLimitAsync.mockResolvedValueOnce({
       isLimited: true,
       retryAfter: 30,

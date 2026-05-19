@@ -38,9 +38,11 @@ export function passwordChangeRequiredResponse(
  * (`src/trpc/init.ts`, Issue #166). REST API handlers must call this BEFORE
  * `passwordChangeRequiredResponse` so the 2FA gate matches the tRPC ordering.
  *
- * The pre-auth 2FA verify endpoint (`/api/2fa/verify`, which runs without a
- * full session) is intentionally exempt — calling this helper there would
- * block the very flow that clears the flag.
+ * The 2FA verify endpoint (`/api/2fa/verify`) is intentionally exempt:
+ * `requiresTwoFactor=true` is the very pre-condition that endpoint needs to
+ * clear, so calling this helper would self-block the flow. That endpoint
+ * performs its own subject binding via `session.user.id` + `isAdmin` and a
+ * subject-id rate-limit key instead (Issue #174).
  */
 export function requiresTwoFactorResponse(
   session: Session | null,
