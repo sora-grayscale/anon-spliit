@@ -8,6 +8,9 @@ jest.mock('@/components/encryption-provider', () => ({
 jest.mock('@/lib/encrypt-helpers', () => ({
   encryptExpenseFormValues: jest.fn(),
 }))
+jest.mock('@/lib/hooks/aggregateCache', () => ({
+  invalidateAggregate: jest.fn(),
+}))
 jest.mock('next/navigation', () => ({
   useRouter: jest.fn(),
 }))
@@ -53,6 +56,7 @@ jest.mock('@/trpc/client', () => {
 
 import { useEncryption } from '@/components/encryption-provider'
 import { encryptExpenseFormValues } from '@/lib/encrypt-helpers'
+import { invalidateAggregate } from '@/lib/hooks/aggregateCache'
 import { fireEvent, render, waitFor } from '@testing-library/react'
 import { useRouter } from 'next/navigation'
 import { useCurrentGroup } from '../current-group-context'
@@ -65,6 +69,9 @@ const mockEncryptExpenseFormValues =
   encryptExpenseFormValues as jest.MockedFunction<
     typeof encryptExpenseFormValues
   >
+const mockInvalidateAggregate = invalidateAggregate as jest.MockedFunction<
+  typeof invalidateAggregate
+>
 const mockUseRouter = useRouter as jest.MockedFunction<typeof useRouter>
 const mockUseCurrentGroup = useCurrentGroup as jest.MockedFunction<
   typeof useCurrentGroup
@@ -87,6 +94,7 @@ beforeEach(() => {
   trpcMocks.__mockCategoriesQuery.mockReturnValue({
     data: { categories: [{ id: 0, grouping: 'g', name: 'cat' }] },
   })
+  mockInvalidateAggregate.mockReset()
 
   mockUseEncryption.mockReset()
   mockUseEncryption.mockReturnValue({
@@ -153,5 +161,28 @@ describe('CreateExpenseForm', () => {
       expect.any(Error),
     )
     warnSpy.mockRestore()
+  })
+
+  it('calls invalidateAggregate before awaiting utils.invalidate (Issue #225)', async () => {
+    let resolveInvalidate: () => void = () => {}
+    trpcMocks.__mockInvalidate.mockImplementation(
+      () => new Promise<void>((r) => (resolveInvalidate = r)),
+    )
+
+    const { getByText } = render(<CreateExpenseForm groupId="g1" />)
+    await waitFor(() => getByText('submit'))
+    fireEvent.click(getByText('submit'))
+
+    await waitFor(() =>
+      expect(mockInvalidateAggregate).toHaveBeenCalledWith('g1'),
+    )
+    // L2 cache must be evicted BEFORE we await the react-query invalidate so
+    // a rejected invalidate cannot leave a stale aggregate visible on the
+    // next balances/stats visit.
+    const aggrOrder = mockInvalidateAggregate.mock.invocationCallOrder[0]
+    const utilOrder = trpcMocks.__mockInvalidate.mock.invocationCallOrder[0]
+    expect(aggrOrder).toBeLessThan(utilOrder)
+
+    resolveInvalidate()
   })
 })

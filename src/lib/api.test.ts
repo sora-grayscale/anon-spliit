@@ -44,8 +44,10 @@ jest.mock('nanoid', () => ({
 
 import { ActivityType } from '@prisma/client'
 import {
+  createExpense,
   createGroup,
   createRecurringExpenses,
+  deleteExpense,
   deleteGroup,
   getActivities,
   getCategories,
@@ -57,6 +59,8 @@ import {
   permanentlyDeleteGroup,
   randomId,
   restoreGroup,
+  updateExpense,
+  updateGroup,
 } from './api'
 import { prisma } from './prisma'
 
@@ -626,6 +630,219 @@ describe('API data access layer', () => {
       await createRecurringExpenses()
 
       expect(mock$transaction).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('expensesRevision bump (Issue #225)', () => {
+    function setupTransactionMock() {
+      const txGroupUpdate = jest.fn().mockResolvedValue({})
+      const txExpenseCreate = jest.fn().mockResolvedValue({
+        id: 'e1',
+        createdAt: new Date(),
+      })
+      const txExpenseUpdate = jest.fn().mockResolvedValue({})
+      const txExpenseDelete = jest.fn().mockResolvedValue({})
+      const txActivityCreate = jest.fn().mockResolvedValue({})
+      ;(prisma.$transaction as jest.Mock).mockImplementation(
+        async (callback: (tx: unknown) => Promise<unknown>) =>
+          callback({
+            group: { update: txGroupUpdate },
+            expense: {
+              create: txExpenseCreate,
+              update: txExpenseUpdate,
+              delete: txExpenseDelete,
+            },
+            activity: { create: txActivityCreate },
+          }),
+      )
+      return {
+        txGroupUpdate,
+        txExpenseCreate,
+        txExpenseUpdate,
+        txExpenseDelete,
+        txActivityCreate,
+      }
+    }
+
+    const fakeFormValues = {
+      title: 't',
+      amount: 100,
+      category: 0,
+      paidBy: 'p1',
+      paidFor: [{ participant: 'p1', shares: 1 }],
+      expenseDate: new Date('2026-05-10T00:00:00.000Z'),
+      splitMode: 'EVENLY' as const,
+      recurrenceRule: 'NONE' as const,
+      isReimbursement: false,
+      notes: null,
+    }
+
+    it('createExpense bumps Group.expensesRevision in the same transaction', async () => {
+      const { txGroupUpdate, txExpenseCreate, txActivityCreate } =
+        setupTransactionMock()
+      ;(mockGroup.findUnique as jest.Mock).mockResolvedValue({
+        id: 'g1',
+        participants: [{ id: 'p1' }],
+      })
+
+      await createExpense(fakeFormValues as never, 'g1')
+
+      expect(txGroupUpdate).toHaveBeenCalledWith({
+        where: { id: 'g1' },
+        data: { expensesRevision: { increment: 1 } },
+      })
+      // Order: activity → revision bump → expense create.
+      const activityOrder = txActivityCreate.mock.invocationCallOrder[0]
+      const groupOrder = txGroupUpdate.mock.invocationCallOrder[0]
+      const expenseOrder = txExpenseCreate.mock.invocationCallOrder[0]
+      expect(activityOrder).toBeLessThan(groupOrder)
+      expect(groupOrder).toBeLessThan(expenseOrder)
+    })
+
+    it('updateExpense bumps Group.expensesRevision in the same transaction', async () => {
+      const { txGroupUpdate, txExpenseUpdate } = setupTransactionMock()
+      ;(mockGroup.findUnique as jest.Mock).mockResolvedValue({
+        id: 'g1',
+        participants: [{ id: 'p1' }],
+      })
+      ;(mockExpense.findFirst as jest.Mock).mockResolvedValue({
+        id: 'e1',
+        title: 't',
+        expenseDate: new Date('2026-05-10T00:00:00.000Z'),
+        recurrenceRule: 'NONE',
+        recurringExpenseLink: null,
+        paidFor: [{ participantId: 'p1', shares: 1 }],
+      })
+
+      await updateExpense('g1', 'e1', fakeFormValues as never)
+
+      expect(txGroupUpdate).toHaveBeenCalledWith({
+        where: { id: 'g1' },
+        data: { expensesRevision: { increment: 1 } },
+      })
+      expect(txExpenseUpdate).toHaveBeenCalledTimes(1)
+    })
+
+    it('deleteExpense bumps Group.expensesRevision in the same transaction', async () => {
+      const { txGroupUpdate, txExpenseDelete } = setupTransactionMock()
+      ;(mockExpense.findFirst as jest.Mock).mockResolvedValue({
+        id: 'e1',
+        title: 't',
+        groupId: 'g1',
+      })
+
+      await deleteExpense('g1', 'e1')
+
+      expect(txGroupUpdate).toHaveBeenCalledWith({
+        where: { id: 'g1' },
+        data: { expensesRevision: { increment: 1 } },
+      })
+      expect(txExpenseDelete).toHaveBeenCalledTimes(1)
+    })
+
+    it('updateGroup bumps Group.expensesRevision in the same update', async () => {
+      ;(mockGroup.findUnique as jest.Mock).mockResolvedValue({
+        id: 'g1',
+        participants: [{ id: 'p1', name: 'Alice' }],
+      })
+      ;(mockExpense.findMany as jest.Mock).mockResolvedValue([])
+      ;(mockGroup.update as jest.Mock).mockResolvedValue({ id: 'g1' })
+
+      await updateGroup('g1', {
+        name: 'new',
+        currency: '$',
+        participants: [{ id: 'p1', name: 'Alice renamed' }],
+      } as never)
+
+      expect(mockGroup.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'g1' },
+          data: expect.objectContaining({
+            expensesRevision: { increment: 1 },
+          }),
+        }),
+      )
+    })
+
+    it('createRecurringExpenses bumps Group.expensesRevision in the same transaction', async () => {
+      jest.useFakeTimers()
+      jest.setSystemTime(new Date('2026-05-18T00:00:00.000Z'))
+      try {
+        const txGroupUpdate = jest.fn().mockResolvedValue({})
+        const txExpenseCreate = jest.fn().mockResolvedValue({
+          id: 'new-exp-1',
+          createdAt: new Date('2026-05-17T00:00:00.000Z'),
+          expenseDate: new Date('2026-05-17T00:00:00.000Z'),
+          groupId: 'g1',
+          paidById: 'p1',
+          paidFor: [{ participantId: 'p1', shares: '1' }],
+          paidBy: { id: 'p1', name: 'Alice' },
+          recurrenceRule: 'DAILY',
+          categoryId: '0',
+          title: 't',
+          amount: '100',
+          splitMode: 'EVENLY',
+          isReimbursement: false,
+          notes: null,
+          originalAmount: null,
+          originalCurrency: null,
+          conversionRate: null,
+          recurringExpenseLinkId: 'new-link-1',
+        })
+        const txRecurringLinkUpdate = jest.fn().mockResolvedValue({})
+        ;(prisma.$transaction as jest.Mock).mockImplementation(
+          async (callback: (tx: unknown) => Promise<unknown>) =>
+            callback({
+              expense: { create: txExpenseCreate },
+              recurringExpenseLink: { update: txRecurringLinkUpdate },
+              group: { update: txGroupUpdate },
+            }),
+        )
+        // Single eligible link with nextExpenseDate = today - 1d.
+        // DAILY rule -> the inner while-loop runs exactly once (next date
+        // matches today and exits the loop).
+        ;(mockRecurringExpenseLink.findMany as jest.Mock).mockResolvedValue([
+          {
+            id: 'link-1',
+            nextExpenseDate: new Date('2026-05-17T00:00:00.000Z'),
+            currentFrameExpense: {
+              id: 'orig-1',
+              groupId: 'g1',
+              paidById: 'p1',
+              paidFor: [{ participantId: 'p1', shares: '1' }],
+              paidBy: { id: 'p1', name: 'Alice' },
+              recurrenceRule: 'DAILY',
+              categoryId: '0',
+              expenseDate: new Date('2026-05-17T00:00:00.000Z'),
+              title: 't',
+              amount: '100',
+              splitMode: 'EVENLY',
+              isReimbursement: false,
+              notes: null,
+              originalAmount: null,
+              originalCurrency: null,
+              conversionRate: null,
+              recurringExpenseLinkId: 'link-1',
+              createdAt: new Date('2026-05-16T00:00:00.000Z'),
+            },
+          },
+        ])
+
+        await createRecurringExpenses('g1')
+
+        expect(txExpenseCreate).toHaveBeenCalledTimes(1)
+        expect(txGroupUpdate).toHaveBeenCalledWith({
+          where: { id: 'g1' },
+          data: { expensesRevision: { increment: 1 } },
+        })
+        // The revision bump runs inside the same $transaction as the
+        // expense.create, after the new expense exists.
+        const expenseOrder = txExpenseCreate.mock.invocationCallOrder[0]
+        const groupOrder = txGroupUpdate.mock.invocationCallOrder[0]
+        expect(expenseOrder).toBeLessThan(groupOrder)
+      } finally {
+        jest.useRealTimers()
+      }
     })
   })
 })

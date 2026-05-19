@@ -9,6 +9,9 @@ jest.mock('@/lib/encrypt-helpers', () => ({
   decryptExpense: jest.fn(),
   encryptExpenseFormValues: jest.fn(),
 }))
+jest.mock('@/lib/hooks/aggregateCache', () => ({
+  invalidateAggregate: jest.fn(),
+}))
 jest.mock('next/navigation', () => ({
   useRouter: jest.fn(),
 }))
@@ -74,6 +77,7 @@ jest.mock('@/trpc/client', () => {
 
 import { useEncryption } from '@/components/encryption-provider'
 import { decryptExpense, encryptExpenseFormValues } from '@/lib/encrypt-helpers'
+import { invalidateAggregate } from '@/lib/hooks/aggregateCache'
 import { fireEvent, render, waitFor } from '@testing-library/react'
 import { useRouter } from 'next/navigation'
 import { useCurrentGroup } from '../current-group-context'
@@ -89,6 +93,9 @@ const mockEncryptExpenseFormValues =
   encryptExpenseFormValues as jest.MockedFunction<
     typeof encryptExpenseFormValues
   >
+const mockInvalidateAggregate = invalidateAggregate as jest.MockedFunction<
+  typeof invalidateAggregate
+>
 const mockUseRouter = useRouter as jest.MockedFunction<typeof useRouter>
 const mockUseCurrentGroup = useCurrentGroup as jest.MockedFunction<
   typeof useCurrentGroup
@@ -141,6 +148,7 @@ beforeEach(() => {
     data: { categories: [{ id: 0, grouping: 'g', name: 'cat' }] },
   })
   trpcMocks.__mockExpenseQuery.mockReset()
+  mockInvalidateAggregate.mockReset()
 
   mockUseEncryption.mockReset()
   mockUseEncryption.mockReturnValue({
@@ -303,5 +311,55 @@ describe('EditExpenseForm', () => {
     await waitFor(() =>
       expect(routerPushMock).toHaveBeenCalledWith('/groups/g1'),
     )
+  })
+
+  it('calls invalidateAggregate before awaiting utils.invalidate on update (Issue #225)', async () => {
+    trpcMocks.__mockExpenseQuery.mockReturnValue({
+      data: { expense: fakeExpense('exp1', 'cipher') },
+    })
+    let resolveInvalidate: () => void = () => {}
+    trpcMocks.__mockInvalidate.mockImplementation(
+      () => new Promise<void>((r) => (resolveInvalidate = r)),
+    )
+
+    const { getByText } = render(
+      <EditExpenseForm groupId="g1" expenseId="exp1" />,
+    )
+    await waitFor(() => getByText('submit'))
+    fireEvent.click(getByText('submit'))
+
+    await waitFor(() =>
+      expect(mockInvalidateAggregate).toHaveBeenCalledWith('g1'),
+    )
+    const aggrOrder = mockInvalidateAggregate.mock.invocationCallOrder[0]
+    const utilOrder = trpcMocks.__mockInvalidate.mock.invocationCallOrder[0]
+    expect(aggrOrder).toBeLessThan(utilOrder)
+
+    resolveInvalidate()
+  })
+
+  it('calls invalidateAggregate before awaiting utils.invalidate on delete (Issue #225)', async () => {
+    trpcMocks.__mockExpenseQuery.mockReturnValue({
+      data: { expense: fakeExpense('exp1', 'cipher') },
+    })
+    let resolveInvalidate: () => void = () => {}
+    trpcMocks.__mockInvalidate.mockImplementation(
+      () => new Promise<void>((r) => (resolveInvalidate = r)),
+    )
+
+    const { getByText } = render(
+      <EditExpenseForm groupId="g1" expenseId="exp1" />,
+    )
+    await waitFor(() => getByText('delete'))
+    fireEvent.click(getByText('delete'))
+
+    await waitFor(() =>
+      expect(mockInvalidateAggregate).toHaveBeenCalledWith('g1'),
+    )
+    const aggrOrder = mockInvalidateAggregate.mock.invocationCallOrder[0]
+    const utilOrder = trpcMocks.__mockInvalidate.mock.invocationCallOrder[0]
+    expect(aggrOrder).toBeLessThan(utilOrder)
+
+    resolveInvalidate()
   })
 })

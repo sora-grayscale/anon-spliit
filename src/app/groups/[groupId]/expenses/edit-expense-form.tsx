@@ -1,6 +1,7 @@
 'use client'
 import { useEncryption } from '@/components/encryption-provider'
 import { decryptExpense, encryptExpenseFormValues } from '@/lib/encrypt-helpers'
+import { invalidateAggregate } from '@/lib/hooks/aggregateCache'
 import { trpc } from '@/trpc/client'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
@@ -99,6 +100,10 @@ export function EditExpenseForm({
           expenseFormValues: dataToSend,
           participantId,
         })
+        // Issue #225: drop the decrypted-aggregate cache BEFORE awaiting the
+        // react-query invalidate so a rejected invalidate cannot leave a
+        // stale cache entry visible on the next balances/stats visit.
+        invalidateAggregate(groupId)
         try {
           await utils.groups.expenses.invalidate()
         } catch (error) {
@@ -116,6 +121,10 @@ export function EditExpenseForm({
           groupId,
           participantId,
         })
+        // Issue #225: drop the decrypted-aggregate cache BEFORE awaiting the
+        // react-query invalidate so a rejected invalidate cannot leave a
+        // stale cache entry visible on the next balances/stats visit.
+        invalidateAggregate(groupId)
         try {
           await utils.groups.expenses.invalidate()
         } catch (error) {

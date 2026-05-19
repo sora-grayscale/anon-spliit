@@ -8,11 +8,13 @@ jest.mock('@/lib/encrypt-helpers', () => ({
 // (memoized internally). Our mock must mirror that, otherwise the hook's
 // `fetchAll` useCallback dep keeps changing and triggers infinite re-fetches.
 jest.mock('@/trpc/client', () => {
-  const fetchFn = jest.fn()
+  const listAllFetch = jest.fn()
+  const revisionFetch = jest.fn()
   const utils = {
     groups: {
       expenses: {
-        listAll: { fetch: fetchFn },
+        listAll: { fetch: listAllFetch },
+        revision: { fetch: revisionFetch },
       },
     },
   }
@@ -20,13 +22,18 @@ jest.mock('@/trpc/client', () => {
     trpc: {
       useUtils: () => utils,
     },
-    __mockListAllFetch: fetchFn,
+    __mockListAllFetch: listAllFetch,
+    __mockRevisionFetch: revisionFetch,
   }
 })
 
 import { useEncryption } from '@/components/encryption-provider'
 import { decryptExpenses } from '@/lib/encrypt-helpers'
 import { act, renderHook, waitFor } from '@testing-library/react'
+import {
+  __resetAggregateCacheForTest,
+  invalidateAggregate,
+} from './aggregateCache'
 import { useAllGroupExpenses } from './useAllGroupExpenses'
 
 const mockUseEncryption = useEncryption as jest.MockedFunction<
@@ -35,9 +42,12 @@ const mockUseEncryption = useEncryption as jest.MockedFunction<
 const mockDecryptExpenses = decryptExpenses as jest.MockedFunction<
   typeof decryptExpenses
 >
-const mockListAllFetch = (
-  jest.requireMock('@/trpc/client') as { __mockListAllFetch: jest.Mock }
-).__mockListAllFetch
+const trpcMocks = jest.requireMock('@/trpc/client') as {
+  __mockListAllFetch: jest.Mock
+  __mockRevisionFetch: jest.Mock
+}
+const mockListAllFetch = trpcMocks.__mockListAllFetch
+const mockRevisionFetch = trpcMocks.__mockRevisionFetch
 
 type FakeExpense = {
   id: string
@@ -77,10 +87,18 @@ function makePage(
 }
 
 beforeEach(() => {
+  __resetAggregateCacheForTest()
   mockListAllFetch.mockReset()
   mockDecryptExpenses.mockReset()
-  // Default: identity passthrough decrypt
+  mockRevisionFetch.mockReset()
+  // Default: identity passthrough decrypt and a stable revision so existing
+  // tests do not need to know about race detection.
   mockDecryptExpenses.mockImplementation(async (rows) => rows as never)
+  mockRevisionFetch.mockResolvedValue({ revision: 1 })
+})
+
+afterEach(() => {
+  __resetAggregateCacheForTest()
 })
 
 describe('useAllGroupExpenses (Issue #170)', () => {
@@ -440,6 +458,153 @@ describe('useAllGroupExpenses (Issue #170)', () => {
       expect((caught as Error).message).toMatch(/boom/)
       expect(result.current.queryError?.message).toMatch(/boom/)
       expect(result.current.decryptionError).toBeNull()
+    })
+  })
+
+  describe('aggregate cache + race detection (Issue #225)', () => {
+    it('does NOT re-drain on remount when revision is unchanged', async () => {
+      withKey()
+      mockListAllFetch.mockResolvedValue(
+        makePage([{ id: 'a', title: 't', amount: '1' }]),
+      )
+      mockRevisionFetch.mockResolvedValue({ revision: 5 })
+
+      const { result, unmount } = renderHook(() => useAllGroupExpenses('g1'))
+      await waitFor(() => expect(result.current.isLoading).toBe(false))
+      expect(result.current.expenses).toHaveLength(1)
+
+      const fetchCountBefore = mockListAllFetch.mock.calls.length
+      const decryptCountBefore = mockDecryptExpenses.mock.calls.length
+
+      unmount()
+
+      // New mount with the same (groupId, key) and unchanged server revision
+      // must serve the cached aggregate without a single page fetch or
+      // decrypt call.
+      const { result: result2 } = renderHook(() => useAllGroupExpenses('g1'))
+      await waitFor(() => expect(result2.current.isLoading).toBe(false))
+      expect(result2.current.expenses).toHaveLength(1)
+
+      expect(mockListAllFetch.mock.calls.length).toBe(fetchCountBefore)
+      expect(mockDecryptExpenses.mock.calls.length).toBe(decryptCountBefore)
+    })
+
+    it('re-drains on remount when revision changes', async () => {
+      withKey()
+      mockListAllFetch.mockResolvedValue(
+        makePage([{ id: 'a', title: 't', amount: '1' }]),
+      )
+      mockRevisionFetch.mockResolvedValue({ revision: 5 })
+
+      const { result, unmount } = renderHook(() => useAllGroupExpenses('g1'))
+      await waitFor(() => expect(result.current.isLoading).toBe(false))
+
+      const fetchCountBefore = mockListAllFetch.mock.calls.length
+      unmount()
+      mockRevisionFetch.mockResolvedValue({ revision: 6 })
+
+      const { result: result2 } = renderHook(() => useAllGroupExpenses('g1'))
+      await waitFor(() => expect(result2.current.isLoading).toBe(false))
+      expect(mockListAllFetch.mock.calls.length).toBeGreaterThan(
+        fetchCountBefore,
+      )
+    })
+
+    it('forceFresh bypasses cache get/set but keeps race detection', async () => {
+      withKey()
+      mockListAllFetch.mockResolvedValue(
+        makePage([{ id: 'a', title: 't', amount: '1' }]),
+      )
+      mockRevisionFetch.mockResolvedValue({ revision: 5 })
+
+      // Step 1: imperative forceFresh on an empty cache — drain runs and
+      // race detection (revBefore + revAfter) must still fire.
+      const { result: imperative } = renderHook(() =>
+        useAllGroupExpenses('g1', { enabled: false, autoDrain: false }),
+      )
+      await act(async () => {
+        await imperative.current.fetchAll({ forceFresh: true })
+      })
+
+      const fetchAfterForceFresh = mockListAllFetch.mock.calls.length
+      expect(fetchAfterForceFresh).toBeGreaterThan(0)
+      // revBefore + revAfter at minimum (forceFresh skips the cache-check
+      // revision fetch, but the race detector still issues two).
+      expect(mockRevisionFetch.mock.calls.length).toBeGreaterThanOrEqual(2)
+
+      // Step 2: autoDrain at the SAME revision should NOT cache-hit because
+      // forceFresh must not populate L2 — confirm via a second drain.
+      const { result: autoResult } = renderHook(() => useAllGroupExpenses('g1'))
+      await waitFor(() => expect(autoResult.current.isLoading).toBe(false))
+      expect(mockListAllFetch.mock.calls.length).toBeGreaterThan(
+        fetchAfterForceFresh,
+      )
+    })
+
+    it('retries on revision race and fails closed after two consecutive races', async () => {
+      withKey()
+      mockListAllFetch.mockResolvedValue(
+        makePage([{ id: 'a', title: 't', amount: '1' }]),
+      )
+      // Each revision fetch returns a different number, so every
+      // revBefore !== revAfter pair forces a retry and ultimately fails
+      // closed after two attempts.
+      let call = 0
+      mockRevisionFetch.mockImplementation(async () => {
+        call++
+        return { revision: call }
+      })
+
+      const { result } = renderHook(() => useAllGroupExpenses('g1'))
+      await waitFor(() => expect(result.current.queryError).not.toBeNull())
+      expect(result.current.queryError?.message).toMatch(/Concurrent mutation/)
+      // Stale snapshot must NOT be exposed.
+      expect(result.current.expenses).toBeUndefined()
+      // isLoading flips to false so consumers render their error state.
+      expect(result.current.isLoading).toBe(false)
+    })
+
+    it('fails closed when revision fetch throws (does NOT serve cached aggregate)', async () => {
+      withKey()
+      mockListAllFetch.mockResolvedValue(
+        makePage([{ id: 'a', title: 't', amount: '1' }]),
+      )
+      mockRevisionFetch.mockResolvedValue({ revision: 5 })
+
+      // Prime the cache.
+      const { result, unmount } = renderHook(() => useAllGroupExpenses('g1'))
+      await waitFor(() => expect(result.current.isLoading).toBe(false))
+      unmount()
+
+      mockRevisionFetch.mockReset()
+      mockRevisionFetch.mockRejectedValue(new Error('revision boom'))
+
+      const { result: result2 } = renderHook(() => useAllGroupExpenses('g1'))
+      await waitFor(() =>
+        expect(result2.current.queryError?.message).toMatch(/revision boom/),
+      )
+      expect(result2.current.expenses).toBeUndefined()
+    })
+
+    it('re-drains after invalidateAggregate', async () => {
+      withKey()
+      mockListAllFetch.mockResolvedValue(
+        makePage([{ id: 'a', title: 't', amount: '1' }]),
+      )
+      mockRevisionFetch.mockResolvedValue({ revision: 5 })
+
+      const { result, unmount } = renderHook(() => useAllGroupExpenses('g1'))
+      await waitFor(() => expect(result.current.isLoading).toBe(false))
+      unmount()
+
+      invalidateAggregate('g1')
+
+      const fetchCountBefore = mockListAllFetch.mock.calls.length
+      const { result: result2 } = renderHook(() => useAllGroupExpenses('g1'))
+      await waitFor(() => expect(result2.current.isLoading).toBe(false))
+      expect(mockListAllFetch.mock.calls.length).toBeGreaterThan(
+        fetchCountBefore,
+      )
     })
   })
 })
