@@ -763,5 +763,86 @@ describe('API data access layer', () => {
         }),
       )
     })
+
+    it('createRecurringExpenses bumps Group.expensesRevision in the same transaction', async () => {
+      jest.useFakeTimers()
+      jest.setSystemTime(new Date('2026-05-18T00:00:00.000Z'))
+      try {
+        const txGroupUpdate = jest.fn().mockResolvedValue({})
+        const txExpenseCreate = jest.fn().mockResolvedValue({
+          id: 'new-exp-1',
+          createdAt: new Date('2026-05-17T00:00:00.000Z'),
+          expenseDate: new Date('2026-05-17T00:00:00.000Z'),
+          groupId: 'g1',
+          paidById: 'p1',
+          paidFor: [{ participantId: 'p1', shares: '1' }],
+          paidBy: { id: 'p1', name: 'Alice' },
+          recurrenceRule: 'DAILY',
+          categoryId: '0',
+          title: 't',
+          amount: '100',
+          splitMode: 'EVENLY',
+          isReimbursement: false,
+          notes: null,
+          originalAmount: null,
+          originalCurrency: null,
+          conversionRate: null,
+          recurringExpenseLinkId: 'new-link-1',
+        })
+        const txRecurringLinkUpdate = jest.fn().mockResolvedValue({})
+        ;(prisma.$transaction as jest.Mock).mockImplementation(
+          async (callback: (tx: unknown) => Promise<unknown>) =>
+            callback({
+              expense: { create: txExpenseCreate },
+              recurringExpenseLink: { update: txRecurringLinkUpdate },
+              group: { update: txGroupUpdate },
+            }),
+        )
+        // Single eligible link with nextExpenseDate = today - 1d.
+        // DAILY rule -> the inner while-loop runs exactly once (next date
+        // matches today and exits the loop).
+        ;(mockRecurringExpenseLink.findMany as jest.Mock).mockResolvedValue([
+          {
+            id: 'link-1',
+            nextExpenseDate: new Date('2026-05-17T00:00:00.000Z'),
+            currentFrameExpense: {
+              id: 'orig-1',
+              groupId: 'g1',
+              paidById: 'p1',
+              paidFor: [{ participantId: 'p1', shares: '1' }],
+              paidBy: { id: 'p1', name: 'Alice' },
+              recurrenceRule: 'DAILY',
+              categoryId: '0',
+              expenseDate: new Date('2026-05-17T00:00:00.000Z'),
+              title: 't',
+              amount: '100',
+              splitMode: 'EVENLY',
+              isReimbursement: false,
+              notes: null,
+              originalAmount: null,
+              originalCurrency: null,
+              conversionRate: null,
+              recurringExpenseLinkId: 'link-1',
+              createdAt: new Date('2026-05-16T00:00:00.000Z'),
+            },
+          },
+        ])
+
+        await createRecurringExpenses('g1')
+
+        expect(txExpenseCreate).toHaveBeenCalledTimes(1)
+        expect(txGroupUpdate).toHaveBeenCalledWith({
+          where: { id: 'g1' },
+          data: { expensesRevision: { increment: 1 } },
+        })
+        // The revision bump runs inside the same $transaction as the
+        // expense.create, after the new expense exists.
+        const expenseOrder = txExpenseCreate.mock.invocationCallOrder[0]
+        const groupOrder = txGroupUpdate.mock.invocationCallOrder[0]
+        expect(expenseOrder).toBeLessThan(groupOrder)
+      } finally {
+        jest.useRealTimers()
+      }
+    })
   })
 })
