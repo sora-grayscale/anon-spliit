@@ -6,6 +6,7 @@
  */
 
 import {
+  checkOperationRateLimit,
   checkRateLimit,
   checkRateLimitAsync,
   clearAttempts,
@@ -14,6 +15,7 @@ import {
   getStorageType,
   recordFailedAttempt,
   recordFailedAttemptAsync,
+  recordOperationAttempt,
 } from './rate-limit'
 
 describe('rate-limit', () => {
@@ -154,5 +156,78 @@ describe('rate-limit', () => {
     it('should export storage type function', () => {
       expect(typeof getStorageType).toBe('function')
     })
+  })
+})
+
+describe('operation limiter (Issue #78)', () => {
+  // operationAttempts is private module state with no clear() API, so
+  // each test must use a unique key to avoid cross-test pollution.
+  function keyFor(...parts: string[]): string {
+    const name = expect.getState().currentTestName ?? 'unknown'
+    return ['op-limiter-test', name, ...parts].join('::')
+  }
+
+  const WINDOW = 60 * 60 * 1000
+  const MAX = 60
+
+  beforeEach(() => {
+    jest.spyOn(Date, 'now').mockReturnValue(1700000000000)
+  })
+
+  afterEach(() => {
+    jest.restoreAllMocks()
+  })
+
+  it('returns not limited with full remaining for a fresh key', () => {
+    const key = keyFor('fresh')
+    const result = checkOperationRateLimit(key, MAX, WINDOW)
+    expect(result.isLimited).toBe(false)
+    expect(result.remainingAttempts).toBe(MAX)
+  })
+
+  it('returns not limited remaining 1 after 59 records', () => {
+    const key = keyFor('59-records')
+    for (let i = 0; i < 59; i++) {
+      recordOperationAttempt(key, MAX, WINDOW)
+    }
+    const result = checkOperationRateLimit(key, MAX, WINDOW)
+    expect(result.isLimited).toBe(false)
+    expect(result.remainingAttempts).toBe(1)
+  })
+
+  it('returns limited with retryAfter > 0 once count reaches maxAttempts', () => {
+    const key = keyFor('60-records')
+    for (let i = 0; i < MAX; i++) {
+      recordOperationAttempt(key, MAX, WINDOW)
+    }
+    const result = checkOperationRateLimit(key, MAX, WINDOW)
+    expect(result.isLimited).toBe(true)
+    expect(result.retryAfter).toBeGreaterThan(0)
+  })
+
+  it('keeps counters independent across keys', () => {
+    const keyA = keyFor('independent', 'A')
+    const keyB = keyFor('independent', 'B')
+    for (let i = 0; i < MAX; i++) {
+      recordOperationAttempt(keyA, MAX, WINDOW)
+    }
+    expect(checkOperationRateLimit(keyA, MAX, WINDOW).isLimited).toBe(true)
+    const resultB = checkOperationRateLimit(keyB, MAX, WINDOW)
+    expect(resultB.isLimited).toBe(false)
+    expect(resultB.remainingAttempts).toBe(MAX)
+  })
+
+  it('resets the window after windowMs elapses', () => {
+    const key = keyFor('reset')
+    const t0 = 1700000000000
+    ;(Date.now as jest.Mock).mockReturnValue(t0)
+    for (let i = 0; i < MAX; i++) {
+      recordOperationAttempt(key, MAX, WINDOW)
+    }
+    expect(checkOperationRateLimit(key, MAX, WINDOW).isLimited).toBe(true)
+    ;(Date.now as jest.Mock).mockReturnValue(t0 + WINDOW + 1)
+    const result = checkOperationRateLimit(key, MAX, WINDOW)
+    expect(result.isLimited).toBe(false)
+    expect(result.remainingAttempts).toBe(MAX)
   })
 })
