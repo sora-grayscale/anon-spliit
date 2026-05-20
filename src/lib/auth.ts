@@ -3,6 +3,7 @@
  */
 
 import { jwtCallback } from '@/lib/auth-jwt'
+import { env } from '@/lib/env'
 import { prisma } from '@/lib/prisma'
 import {
   checkRateLimitAsync,
@@ -165,23 +166,36 @@ const authConfig: NextAuthConfig = {
 export const { handlers, signIn, signOut, auth } = NextAuth(authConfig)
 
 /**
- * Check if private instance mode is enabled
+ * Check if private instance mode is enabled.
+ *
+ * Reads `env.PRIVATE_INSTANCE` (validated boolean via `env.ts:interpretEnvVarAsBool`),
+ * so `true`, `yes`, `1`, `on` (case-insensitive) all enable the mode. Previously
+ * this helper read `process.env.PRIVATE_INSTANCE === 'true'` directly, which
+ * was inconsistent with `env.ts` and `proxy.ts` (Issue #195 — `auth.ts`-side fix).
  */
 export function isPrivateInstance(): boolean {
-  return process.env.PRIVATE_INSTANCE === 'true'
+  return env.PRIVATE_INSTANCE
 }
 
 /**
- * Initialize admin user from environment variables
- * Call this on server startup if PRIVATE_INSTANCE is enabled
+ * Initialize admin user from environment variables.
+ *
+ * Called lazily from `src/app/auth/layout.tsx` on the first signin-page hit.
+ * No public init endpoint exists (Issue #175 — `/api/admin/init` removed).
+ *
+ * Reads `env.ADMIN_EMAIL` / `env.ADMIN_PASSWORD` (validated via `env.ts`).
+ * In production with `PRIVATE_INSTANCE=true` the `env.ts:superRefine` step
+ * already enforces that both are set, so the `!adminEmail || !adminPassword`
+ * branch below is normally unreachable; it is kept as a defensive guard for
+ * non-production / partial-config scenarios.
  */
 export async function initializeAdmin(): Promise<void> {
   if (!isPrivateInstance()) {
     return
   }
 
-  const adminEmail = process.env.ADMIN_EMAIL
-  const adminPassword = process.env.ADMIN_PASSWORD
+  const adminEmail = env.ADMIN_EMAIL
+  const adminPassword = env.ADMIN_PASSWORD
 
   if (!adminEmail || !adminPassword) {
     console.warn(

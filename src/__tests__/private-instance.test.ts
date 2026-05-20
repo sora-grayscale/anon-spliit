@@ -266,15 +266,96 @@ describe('Private Instance Mode', () => {
   })
 
   describe('Environment Variable Handling', () => {
-    it('should correctly check PRIVATE_INSTANCE flag', () => {
-      const isPrivateInstance = (envValue: string | undefined) =>
-        envValue === 'true'
+    // Pins that `auth.ts:isPrivateInstance()` reads `env.PRIVATE_INSTANCE`
+    // (validated boolean from `env.ts`) rather than `process.env` directly.
+    // Issue #195 fix on the `auth.ts` side — `env.ts:interpretEnvVarAsBool`
+    // accepts `true|yes|1|on` case-insensitively, but that conversion is the
+    // responsibility of `env.ts` and is covered by env-level tests; here we
+    // only pin that the helper forwards `env.PRIVATE_INSTANCE` unchanged.
+    async function loadIsPrivateInstance(
+      privateInstanceValue: boolean,
+    ): Promise<() => boolean> {
+      let isPrivateInstance: () => boolean = () => false
 
-      expect(isPrivateInstance('true')).toBe(true)
-      expect(isPrivateInstance('false')).toBe(false)
-      expect(isPrivateInstance(undefined)).toBe(false)
-      expect(isPrivateInstance('')).toBe(false)
-      expect(isPrivateInstance('TRUE')).toBe(false) // Case sensitive
+      await jest.isolateModulesAsync(async () => {
+        jest.doMock('@/lib/env', () => ({
+          __esModule: true,
+          env: {
+            PRIVATE_INSTANCE: privateInstanceValue,
+            ADMIN_EMAIL: undefined,
+            ADMIN_PASSWORD: undefined,
+          },
+        }))
+        jest.doMock('@/lib/prisma', () => ({
+          __esModule: true,
+          prisma: { admin: { findUnique: jest.fn(), create: jest.fn() } },
+        }))
+        jest.doMock('@/lib/rate-limit', () => ({
+          __esModule: true,
+          checkRateLimitAsync: jest.fn(),
+          clearAttemptsAsync: jest.fn(),
+          recordFailedAttemptAsync: jest.fn(),
+        }))
+        jest.doMock('@/lib/auth-jwt', () => ({
+          __esModule: true,
+          jwtCallback: jest.fn(),
+        }))
+        jest.doMock('next-auth', () => ({
+          __esModule: true,
+          default: () => ({
+            handlers: {},
+            signIn: jest.fn(),
+            signOut: jest.fn(),
+            auth: jest.fn(),
+          }),
+        }))
+        jest.doMock('next-auth/providers/credentials', () => ({
+          __esModule: true,
+          default: (config: unknown) => config,
+        }))
+        jest.doMock('@auth/prisma-adapter', () => ({
+          __esModule: true,
+          PrismaAdapter: jest.fn(() => ({})),
+        }))
+        jest.doMock('bcryptjs', () => ({
+          __esModule: true,
+          default: {
+            hash: jest.fn(),
+            hashSync: jest.fn(() => 'hashed-sync-dummy'),
+            compare: jest.fn(),
+          },
+        }))
+
+        const mod = (await import('@/lib/auth')) as {
+          isPrivateInstance: () => boolean
+        }
+        isPrivateInstance = mod.isPrivateInstance
+      })
+
+      return isPrivateInstance
+    }
+
+    afterEach(() => {
+      jest.resetModules()
+      jest.clearAllMocks()
+      jest.dontMock('@/lib/env')
+      jest.dontMock('@/lib/prisma')
+      jest.dontMock('@/lib/rate-limit')
+      jest.dontMock('@/lib/auth-jwt')
+      jest.dontMock('next-auth')
+      jest.dontMock('next-auth/providers/credentials')
+      jest.dontMock('@auth/prisma-adapter')
+      jest.dontMock('bcryptjs')
+    })
+
+    it('isPrivateInstance() returns true when env.PRIVATE_INSTANCE is true', async () => {
+      const isPrivateInstance = await loadIsPrivateInstance(true)
+      expect(isPrivateInstance()).toBe(true)
+    })
+
+    it('isPrivateInstance() returns false when env.PRIVATE_INSTANCE is false', async () => {
+      const isPrivateInstance = await loadIsPrivateInstance(false)
+      expect(isPrivateInstance()).toBe(false)
     })
   })
 

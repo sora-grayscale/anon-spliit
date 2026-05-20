@@ -2,8 +2,8 @@
  * Auth Layout - Initializes admin user on first access (Issue #4)
  *
  * This layout ensures the admin user is created automatically when
- * someone accesses the signin page for the first time, eliminating
- * the need to manually call /api/admin/init.
+ * someone accesses the signin page for the first time. Admin bootstrap
+ * is handled by this layout; no public init endpoint exists (Issue #175).
  */
 
 import { initializeAdmin } from '@/lib/auth'
