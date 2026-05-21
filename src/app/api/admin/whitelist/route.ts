@@ -55,8 +55,9 @@ const MAX_BODY_BYTES = 4 * 1024 // 4 KB
  * clients may omit it (chunked transfer) or under-declare it.
  *
  * Returns `''` for a missing body. Throws (e.g. from `reader.read()`)
- * propagate to the caller's `try` so the outer `finally` still records
- * the rate-limit attempt (gate already passed).
+ * propagate to the caller's `try`; the limiter slot has already been
+ * reserved synchronously before body reading begins, so an outer-catch
+ * 500 still consumes the attempt.
  */
 async function readRequestBodyWithLimit(
   request: Request,

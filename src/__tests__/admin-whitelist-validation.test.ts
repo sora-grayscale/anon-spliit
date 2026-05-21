@@ -340,7 +340,7 @@ describe('POST /api/admin/whitelist — section F (business duplicates, record o
   })
 })
 
-describe('POST /api/admin/whitelist — section G (success + 500, finally semantics)', () => {
+describe('POST /api/admin/whitelist — section G (success + 500, reserved-slot semantics)', () => {
   beforeEach(() => {
     setupValidSession()
   })
