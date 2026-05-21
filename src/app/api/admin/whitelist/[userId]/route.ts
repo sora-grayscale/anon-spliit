@@ -2,19 +2,14 @@
  * Individual Whitelist User API (Issue #4)
  */
 
-import { auth, isPrivateInstance } from '@/lib/auth'
+import { auth, generateInitialPassword, isPrivateInstance } from '@/lib/auth'
 import {
   passwordChangeRequiredResponse,
   requiresTwoFactorResponse,
 } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
-import { randomBytes } from 'crypto'
 import { NextResponse } from 'next/server'
-
-function generateInitialPassword(): string {
-  return randomBytes(8).toString('base64').slice(0, 12)
-}
 
 /**
  * Reset password for a whitelist user

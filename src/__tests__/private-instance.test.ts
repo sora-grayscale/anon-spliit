@@ -123,32 +123,112 @@ describe('Private Instance Mode', () => {
     })
   })
 
-  describe('Initial Password Generation', () => {
-    it('should generate passwords with sufficient entropy', () => {
-      const { randomBytes } = require('crypto')
+  describe('Initial Password Generation (Issue #177)', () => {
+    // The shared helper lives in @/lib/auth, whose top-level evaluates
+    // NextAuth(authConfig) + PrismaAdapter(prisma) and reads env. We
+    // mirror the `loadIsPrivateInstance` pattern below: load the module
+    // inside `jest.isolateModulesAsync` with the heavy dependencies
+    // doMocked, then exercise the helper itself. `crypto` is NOT
+    // mocked — the test runs the real `randomBytes()` so entropy /
+    // charset / uniqueness are measured against the production
+    // implementation. The pre-#177 path was `randomBytes(8).toString(
+    // 'base64').slice(0, 12)` (= 64 bits); the new shared helper emits
+    // 20 base64url chars (= 120 bits).
+    async function loadGenerateInitialPassword(): Promise<() => string> {
+      let generateInitialPassword: () => string = () => ''
 
-      const generateInitialPassword = (): string => {
-        return randomBytes(8).toString('base64').slice(0, 12)
-      }
+      await jest.isolateModulesAsync(async () => {
+        jest.doMock('@/lib/env', () => ({
+          __esModule: true,
+          env: {
+            PRIVATE_INSTANCE: false,
+            ADMIN_EMAIL: undefined,
+            ADMIN_PASSWORD: undefined,
+          },
+        }))
+        jest.doMock('@/lib/prisma', () => ({
+          __esModule: true,
+          prisma: { admin: { findUnique: jest.fn(), create: jest.fn() } },
+        }))
+        jest.doMock('@/lib/rate-limit', () => ({
+          __esModule: true,
+          checkRateLimitAsync: jest.fn(),
+          clearAttemptsAsync: jest.fn(),
+          recordFailedAttemptAsync: jest.fn(),
+        }))
+        jest.doMock('@/lib/auth-jwt', () => ({
+          __esModule: true,
+          jwtCallback: jest.fn(),
+        }))
+        jest.doMock('next-auth', () => ({
+          __esModule: true,
+          default: () => ({
+            handlers: {},
+            signIn: jest.fn(),
+            signOut: jest.fn(),
+            auth: jest.fn(),
+          }),
+        }))
+        jest.doMock('next-auth/providers/credentials', () => ({
+          __esModule: true,
+          default: (config: unknown) => config,
+        }))
+        jest.doMock('@auth/prisma-adapter', () => ({
+          __esModule: true,
+          PrismaAdapter: jest.fn(() => ({})),
+        }))
+        jest.doMock('bcryptjs', () => ({
+          __esModule: true,
+          default: {
+            hash: jest.fn(),
+            hashSync: jest.fn(() => 'hashed-sync-dummy'),
+            compare: jest.fn(),
+          },
+        }))
 
+        const mod = (await import('@/lib/auth')) as {
+          generateInitialPassword: () => string
+        }
+        generateInitialPassword = mod.generateInitialPassword
+      })
+
+      return generateInitialPassword
+    }
+
+    afterEach(() => {
+      jest.resetModules()
+      jest.clearAllMocks()
+      jest.dontMock('@/lib/env')
+      jest.dontMock('@/lib/prisma')
+      jest.dontMock('@/lib/rate-limit')
+      jest.dontMock('@/lib/auth-jwt')
+      jest.dontMock('next-auth')
+      jest.dontMock('next-auth/providers/credentials')
+      jest.dontMock('@auth/prisma-adapter')
+      jest.dontMock('bcryptjs')
+    })
+
+    it('produces a 20-character password', async () => {
+      const generateInitialPassword = await loadGenerateInitialPassword()
+      const password = generateInitialPassword()
+      expect(password.length).toBe(20)
+    })
+
+    it('uses the base64url alphabet only (A-Z, a-z, 0-9, -, _)', async () => {
+      const generateInitialPassword = await loadGenerateInitialPassword()
+      const password = generateInitialPassword()
+      // base64url omits the URL-unsafe `+`, `/`, `=` of standard base64,
+      // so the password is safe to embed in chat / URL channels.
+      expect(password).toMatch(/^[A-Za-z0-9_-]{20}$/)
+    })
+
+    it('generates unique passwords over 100 samples (sufficient entropy)', async () => {
+      const generateInitialPassword = await loadGenerateInitialPassword()
       const passwords = new Set<string>()
       for (let i = 0; i < 100; i++) {
         passwords.add(generateInitialPassword())
       }
-
-      // All 100 passwords should be unique
       expect(passwords.size).toBe(100)
-    })
-
-    it('should generate passwords of correct length', () => {
-      const { randomBytes } = require('crypto')
-
-      const generateInitialPassword = (): string => {
-        return randomBytes(8).toString('base64').slice(0, 12)
-      }
-
-      const password = generateInitialPassword()
-      expect(password.length).toBe(12)
     })
   })
 
