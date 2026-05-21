@@ -11,10 +11,13 @@
  *     Issue #78. Memory-only / best-effort in multi-instance deployments.
  *
  * Rate-limit policy: pre-auth gates (private-instance, session/admin,
- * 2FA, password-change) and the CHECK itself never touch the limiter.
- * Once CHECK passes, every subsequent outcome — body-size 413, parse
- * 400, zod 400, duplicate 400, success 200, internal 500 — records one
- * attempt via the `finally` block.
+ * 2FA, password-change) and the CHECK itself never touch the limiter,
+ * so a third party cannot be locked out by failed requests. Once CHECK
+ * passes the slot is reserved synchronously — before any await — so a
+ * concurrent burst cannot all observe `count<MAX` and bypass the 60/h
+ * cap. Every subsequent outcome (body-size 413, parse 400, zod 400,
+ * duplicate 400, success 200, internal 500) has therefore already
+ * consumed one attempt.
  */
 
 import { auth, isPrivateInstance } from '@/lib/auth'
@@ -136,9 +139,9 @@ export async function POST(request: Request) {
   const pwChangeResp = passwordChangeRequiredResponse(session)
   if (pwChangeResp) return pwChangeResp
 
-  // 5. Rate-limit CHECK keyed by the admin subject.
-  //    Gates 1-4 intentionally do not touch the limiter. After this
-  //    point every outcome counts as one attempt via the finally below.
+  // 5. Rate-limit CHECK keyed by the admin subject. Gates 1-4 do not
+  //    touch the limiter so a third party cannot be locked out via
+  //    failed requests.
   const rateLimitKey = `${RATE_LIMIT_PREFIX}${session.user.id}`
   const limit = checkOperationRateLimit(
     rateLimitKey,
@@ -158,6 +161,15 @@ export async function POST(request: Request) {
       },
     )
   }
+
+  // Reserve the limiter slot synchronously, before any await. Both
+  // `checkOperationRateLimit` and `recordOperationAttempt` are
+  // synchronous Map operations, so request N's record completes in
+  // the same event-loop tick as its check. Request N+1's check
+  // therefore always observes the incremented count — a concurrent
+  // burst of admin POSTs cannot all pass CHECK at low counts and
+  // bypass the 60/h cap (Codex review iter 1 on PR #231).
+  recordOperationAttempt(rateLimitKey, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS)
 
   try {
     // 6. Streaming body-size cap.
@@ -235,8 +247,6 @@ export async function POST(request: Request) {
       { error: 'Internal server error' },
       { status: 500 },
     )
-  } finally {
-    recordOperationAttempt(rateLimitKey, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS)
   }
 }
 

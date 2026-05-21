@@ -432,4 +432,27 @@ describe('POST /api/admin/whitelist — section H (rate-limit key separation)', 
       expect(call[2]).toBe(60 * 60 * 1000)
     }
   })
+
+  it('reserves the limiter slot synchronously after CHECK (no awaited mock invocation between them)', async () => {
+    const res = await POST(makeRequest(streamBody('{"email":"a@b.co"}')))
+    expect(res.status).toBe(200)
+    expect(mockCheck).toHaveBeenCalledTimes(1)
+    expect(mockRecord).toHaveBeenCalledTimes(1)
+    // jest tracks a monotonic, cross-mock invocationCallOrder. If
+    // `recordOperationAttempt` is the very next mock invocation after
+    // `checkOperationRateLimit`, then no other awaited dependency
+    // (prisma, bcrypt, body reader, etc.) ran between them — proving
+    // the slot is reserved before any await. Without this, a
+    // concurrent burst of admin POSTs could all pass CHECK at low
+    // counts before any of them awaited record (Codex review iter 1
+    // on PR #231).
+    //
+    // Note: Node 20 buffers ReadableStream request bodies during
+    // `new Request(...)` construction, so a pull()-based ordering
+    // probe would fire before the route ever ran. invocationCallOrder
+    // sidesteps that quirk by working off jest's own mock counters.
+    const checkOrder = mockCheck.mock.invocationCallOrder[0]
+    const recordOrder = mockRecord.mock.invocationCallOrder[0]
+    expect(recordOrder).toBe(checkOrder + 1)
+  })
 })
