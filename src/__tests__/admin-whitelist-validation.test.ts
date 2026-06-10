@@ -14,6 +14,7 @@ jest.mock('@/lib/auth', () => ({
   __esModule: true,
   auth: jest.fn(),
   isPrivateInstance: jest.fn(),
+  generateInitialPassword: jest.fn(() => 'A'.repeat(20)),
 }))
 
 jest.mock('@/lib/rate-limit', () => ({
@@ -43,7 +44,7 @@ jest.mock('bcryptjs', () => ({
 }))
 
 import { POST } from '@/app/api/admin/whitelist/route'
-import { auth, isPrivateInstance } from '@/lib/auth'
+import { auth, generateInitialPassword, isPrivateInstance } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import {
   checkOperationRateLimit,
@@ -57,6 +58,8 @@ import bcrypt from 'bcryptjs'
 // real call signatures, so the loss of type safety is acceptable.
 const mockAuth = auth as unknown as jest.Mock
 const mockIsPrivateInstance = isPrivateInstance as unknown as jest.Mock
+const mockGenerateInitialPassword =
+  generateInitialPassword as unknown as jest.Mock
 const mockCheck = checkOperationRateLimit as unknown as jest.Mock
 const mockRecord = recordOperationAttempt as unknown as jest.Mock
 const mockBcryptHash = bcrypt.hash as unknown as jest.Mock
@@ -119,6 +122,9 @@ function setupValidSession(overrides: Partial<SessionUser> = {}) {
   mockIsPrivateInstance.mockReturnValue(true)
   mockAuth.mockResolvedValue(makeSession(overrides))
   mockCheck.mockReturnValue({ isLimited: false, remainingAttempts: 60 })
+  // `jest.resetAllMocks()` in beforeEach wipes the mock's initial impl,
+  // so the literal default needs to be re-established per test.
+  mockGenerateInitialPassword.mockReturnValue('A'.repeat(20))
 }
 
 beforeEach(() => {
@@ -366,8 +372,12 @@ describe('POST /api/admin/whitelist — section G (success + 500, reserved-slot 
     }
     expect(json.user.email).toBe('a@b.co')
     expect(json.user.name).toBe('Alice')
-    expect(typeof json.initialPassword).toBe('string')
-    expect(json.initialPassword.length).toBeGreaterThan(0)
+    // Pin the shared `generateInitialPassword` helper (Issue #177): the
+    // mock returns `'A'.repeat(20)` and that exact value must flow into
+    // both the response and bcrypt.hash so a future refactor that drops
+    // the helper import (or bypasses it) is caught here.
+    expect(json.initialPassword).toBe('A'.repeat(20))
+    expect(mockBcryptHash).toHaveBeenCalledWith('A'.repeat(20), 12)
     expect(mockRecord).toHaveBeenCalledTimes(1)
   })
 

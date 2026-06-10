@@ -20,7 +20,7 @@
  * consumed one attempt.
  */
 
-import { auth, isPrivateInstance } from '@/lib/auth'
+import { auth, generateInitialPassword, isPrivateInstance } from '@/lib/auth'
 import {
   passwordChangeRequiredResponse,
   requiresTwoFactorResponse,
@@ -31,17 +31,8 @@ import {
   recordOperationAttempt,
 } from '@/lib/rate-limit'
 import bcrypt from 'bcryptjs'
-import { randomBytes } from 'crypto'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-
-/**
- * Generate a random initial password with sufficient entropy (Issue #48)
- * Uses 16 bytes (128 bits) of random data for cryptographic strength
- */
-function generateInitialPassword(): string {
-  return randomBytes(16).toString('base64url').slice(0, 20)
-}
 
 const MAX_BODY_BYTES = 4 * 1024 // 4 KB
 

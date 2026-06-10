@@ -12,6 +12,7 @@ import {
 } from '@/lib/rate-limit'
 import { PrismaAdapter } from '@auth/prisma-adapter'
 import bcrypt from 'bcryptjs'
+import { randomBytes } from 'crypto'
 import NextAuth, { type NextAuthConfig } from 'next-auth'
 import Credentials from 'next-auth/providers/credentials'
 
@@ -164,6 +165,25 @@ const authConfig: NextAuthConfig = {
 }
 
 export const { handlers, signIn, signOut, auth } = NextAuth(authConfig)
+
+/**
+ * Generate a random initial password with sufficient entropy.
+ *
+ * Returns 20 base64url characters drawn from `randomBytes(16)`:
+ *   - 16 raw bytes = 128 bits of entropy
+ *   - `.toString('base64url')` = 22 URL-safe characters (no padding)
+ *   - `.slice(0, 20)` = 120 bits of effective entropy
+ *
+ * Shared by `/api/admin/whitelist` POST (create, Issue #48) and PATCH
+ * (reset, Issue #177) so both endpoints emit equally strong passwords.
+ * The pre-Issue-#177 reset path used `randomBytes(8).toString('base64')
+ * .slice(0, 12)` (= 64 bits of entropy), which is brute-forceable in
+ * months on modern HPC. base64url avoids `+`, `/`, `=` so the password
+ * survives chat / URL channels without escaping.
+ */
+export function generateInitialPassword(): string {
+  return randomBytes(16).toString('base64url').slice(0, 20)
+}
 
 /**
  * Check if private instance mode is enabled.
