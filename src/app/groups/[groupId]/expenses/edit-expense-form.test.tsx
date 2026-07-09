@@ -5,6 +5,11 @@
 jest.mock('@/components/encryption-provider', () => ({
   useEncryption: jest.fn(),
 }))
+jest.mock('@/components/encryption-required', () => ({
+  EncryptionRequired: ({ groupId }: { groupId: string }) => (
+    <div data-testid="encryption-required">{groupId}</div>
+  ),
+}))
 jest.mock('@/lib/encrypt-helpers', () => ({
   decryptExpense: jest.fn(),
   encryptExpenseFormValues: jest.fn(),
@@ -230,6 +235,28 @@ describe('EditExpenseForm', () => {
     // Wait long enough for any erroneous decrypt to land.
     await new Promise((r) => setTimeout(r, 20))
     expect(mockDecryptExpense).not.toHaveBeenCalled()
+  })
+
+  it('does not render ciphertext when expense decryption fails (Issue #205)', async () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    mockDecryptExpense.mockRejectedValue(new Error('wrong key'))
+    trpcMocks.__mockExpenseQuery.mockReturnValue({
+      data: { expense: fakeExpense('exp1', 'ciphertext-title') },
+    })
+
+    try {
+      const { getByTestId, queryByText } = render(
+        <EditExpenseForm groupId="g1" expenseId="exp1" />,
+      )
+
+      await waitFor(() =>
+        expect(getByTestId('encryption-required').textContent).toBe('g1'),
+      )
+      expect(queryByText('submit')).toBeNull()
+      expect(queryByText('ciphertext-title')).toBeNull()
+    } finally {
+      warnSpy.mockRestore()
+    }
   })
 
   it('awaits invalidate before navigating on update (Issue #172 finding)', async () => {

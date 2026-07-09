@@ -1,9 +1,5 @@
 import { ZodIssueCode, z } from 'zod'
-
-const interpretEnvVarAsBool = (val: unknown): boolean => {
-  if (typeof val !== 'string') return false
-  return ['true', 'yes', '1', 'on'].includes(val.toLowerCase())
-}
+import { interpretEnvVarAsBool } from './env-bool'
 
 // Convert empty strings to undefined for optional fields
 const emptyStringToUndefined = (val: unknown): unknown => {

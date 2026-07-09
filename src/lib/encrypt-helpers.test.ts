@@ -4,9 +4,11 @@
 
 import { encrypt, generateMasterKey } from './crypto'
 import {
+  decryptActivity,
   decryptExpense,
   decryptExpenses,
   decryptGroup,
+  EncryptedDataDecryptionError,
   encryptExpenseFormValues,
   encryptGroupFormValues,
   looksEncrypted,
@@ -149,6 +151,42 @@ describe('encrypt-helpers', () => {
       expect(decrypted.currency).toBe('¥')
       expect(decrypted.currencyCode).toBeNull()
     })
+
+    it('should reject encrypted group data when the key is wrong', async () => {
+      const key = generateMasterKey()
+      const wrongKey = generateMasterKey()
+      const encrypted = await encryptGroupFormValues(
+        {
+          name: 'Encrypted Group',
+          information: 'Private information',
+          currency: '$',
+          currencyCode: 'USD',
+          participants: [{ name: 'Alice' }],
+        },
+        key,
+      )
+
+      const groupData = {
+        id: 'test-id',
+        name: encrypted.name,
+        information: encrypted.information || null,
+        currency: encrypted.currency,
+        currencyCode: encrypted.currencyCode || null,
+        participants: encrypted.participants.map((p, i) => ({
+          id: `${i + 1}`,
+          name: p.name,
+        })),
+      }
+
+      await expect(decryptGroup(groupData, wrongKey)).rejects.toMatchObject({
+        name: 'EncryptedDataDecryptionError',
+        entity: 'group',
+        reason: 'invalid-ciphertext-or-key',
+      })
+      await expect(decryptGroup(groupData, wrongKey)).rejects.toBeInstanceOf(
+        EncryptedDataDecryptionError,
+      )
+    })
   })
 
   describe('encryptExpenseFormValues and decryptExpense', () => {
@@ -216,6 +254,37 @@ describe('encrypt-helpers', () => {
       )
       expect(decrypted.title).toBe('Coffee')
       expect(decrypted.notes).toBeUndefined()
+    })
+
+    it('should reject encrypted expense data when the key is wrong', async () => {
+      const key = generateMasterKey()
+      const wrongKey = generateMasterKey()
+      const encrypted = await encryptExpenseFormValues(
+        {
+          title: 'Secret dinner',
+          amount: 50,
+          expenseDate: new Date('2024-01-15'),
+          category: 1,
+          splitMode: 'EVENLY' as const,
+          paidFor: [] as { participant: string; shares: number }[],
+          paidBy: '1',
+          isReimbursement: false,
+          saveDefaultSplittingOptions: false,
+          recurrenceRule: 'NONE' as const,
+        },
+        key,
+      )
+
+      await expect(
+        decryptExpense(
+          encrypted as unknown as Parameters<typeof decryptExpense>[0],
+          wrongKey,
+        ),
+      ).rejects.toMatchObject({
+        name: 'EncryptedDataDecryptionError',
+        entity: 'expense',
+        reason: 'invalid-ciphertext-or-key',
+      })
     })
   })
 
@@ -417,6 +486,22 @@ describe('encrypt-helpers', () => {
     })
   })
 
+  describe('decryptActivity', () => {
+    it('should reject encrypted activity data when the key is wrong', async () => {
+      const key = generateMasterKey()
+      const wrongKey = generateMasterKey()
+      const encryptedData = await encrypt('private activity', key)
+
+      await expect(
+        decryptActivity({ data: encryptedData }, wrongKey),
+      ).rejects.toMatchObject({
+        name: 'EncryptedDataDecryptionError',
+        entity: 'activity',
+        reason: 'invalid-ciphertext-or-key',
+      })
+    })
+  })
+
   describe('backward compatibility', () => {
     it('should handle unencrypted legacy data', async () => {
       const key = generateMasterKey()
@@ -488,6 +573,28 @@ describe('encrypt-helpers', () => {
       expect(decrypted.currencyCode).toBe('USD')
     })
 
+    it('should preserve legacy group names that only look encrypted', async () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      const key = generateMasterKey()
+      const legacyGroup = {
+        id: 'test-id',
+        name: 'abcdefghijklmnopqrst',
+        information: null,
+        currency: '$',
+        currencyCode: 'USD',
+        participants: [{ id: '1', name: 'Alice' }],
+      }
+
+      try {
+        const decrypted = await decryptGroup(legacyGroup, key)
+
+        expect(decrypted.name).toBe('abcdefghijklmnopqrst')
+        expect(decrypted.currency).toBe('$')
+      } finally {
+        warnSpy.mockRestore()
+      }
+    })
+
     it('should handle legacy unencrypted originalCurrency (Issue #22)', async () => {
       const key = generateMasterKey()
 
@@ -502,6 +609,24 @@ describe('encrypt-helpers', () => {
 
       // Should return original data since it's not encrypted
       expect(decrypted.originalCurrency).toBe('EUR')
+    })
+
+    it('should preserve legacy expense titles that only look encrypted', async () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      const key = generateMasterKey()
+      const legacyExpense = {
+        title: 'abcdefghijklmnopqrst',
+        amount: 50,
+      }
+
+      try {
+        const decrypted = await decryptExpense(legacyExpense, key)
+
+        expect(decrypted.title).toBe('abcdefghijklmnopqrst')
+        expect(decrypted.amount).toBe(50)
+      } finally {
+        warnSpy.mockRestore()
+      }
     })
   })
 })

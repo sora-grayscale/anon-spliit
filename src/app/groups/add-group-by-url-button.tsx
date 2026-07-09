@@ -40,21 +40,31 @@ export function AddGroupByUrlButton({ reload }: Props) {
           className="flex gap-2"
           onSubmit={async (event) => {
             event.preventDefault()
-            const [, groupId] =
-              url.match(
-                new RegExp(`${window.location.origin}/groups/([^/]+)`),
-              ) ?? []
             setPending(true)
-            const { group } = await utils.groups.get.fetch({
-              groupId: groupId,
-            })
-            if (group) {
+            setError(false)
+
+            try {
+              const parsedUrl = new URL(url)
+              const [, groupId] = parsedUrl.pathname.match(
+                /^\/groups\/([^/]+)/,
+              ) ?? [undefined, undefined]
+
+              if (parsedUrl.origin !== window.location.origin || !groupId) {
+                throw new Error('Invalid group URL')
+              }
+
+              const { group } = await utils.groups.get.fetch({ groupId })
+              if (!group) {
+                throw new Error('Group not found')
+              }
+
               saveRecentGroup({ id: group.id, name: group.name })
               reload()
               setUrl('')
               setOpen(false)
-            } else {
+            } catch {
               setError(true)
+            } finally {
               setPending(false)
             }
           }}

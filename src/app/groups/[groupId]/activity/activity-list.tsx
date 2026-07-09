@@ -4,6 +4,7 @@ import {
   ActivityItem,
 } from '@/app/groups/[groupId]/activity/activity-item'
 import { useEncryption } from '@/components/encryption-provider'
+import { EncryptionRequired } from '@/components/encryption-required'
 import { Skeleton } from '@/components/ui/skeleton'
 import { decryptActivities } from '@/lib/encrypt-helpers'
 import { trpc } from '@/trpc/client'
@@ -110,28 +111,45 @@ export function ActivityList() {
   // Decrypt activities
   const [decryptedActivities, setDecryptedActivities] =
     useState<typeof rawActivities>(undefined)
-  const lastDecryptedRef = useRef<{ key: string; withKey: boolean } | null>(
-    null,
-  )
+  const [decryptionError, setDecryptionError] = useState(false)
+  const lastDecryptedRef = useRef<{
+    activityKey: string
+    encryptionKey: Uint8Array | null
+  } | null>(null)
 
   useEffect(() => {
     let isMounted = true // Track if component is still mounted (Issue #53)
 
-    const activityIds = rawActivities?.map((a) => a.id).join(',') || ''
-    const shouldDecryptWithKey = hasKey && encryptionKey !== null
-    const stableKey = `${activityIds}`
+    const stableKey =
+      rawActivities
+        ?.map((a) =>
+          JSON.stringify([
+            a.id,
+            a.data,
+            a.time,
+            a.activityType,
+            a.participantId,
+            a.expenseId,
+            Boolean(a.expense),
+          ]),
+        )
+        .join('|') || ''
 
     // Skip if already processed with same state
     if (
-      lastDecryptedRef.current?.key === stableKey &&
-      lastDecryptedRef.current?.withKey === shouldDecryptWithKey
+      rawActivities &&
+      lastDecryptedRef.current?.activityKey === stableKey &&
+      lastDecryptedRef.current?.encryptionKey === encryptionKey
     ) {
       return
     }
 
     async function decrypt() {
       if (!rawActivities) {
-        if (isMounted) setDecryptedActivities(undefined)
+        if (isMounted) {
+          setDecryptedActivities(undefined)
+          setDecryptionError(false)
+        }
         return
       }
 
@@ -139,7 +157,11 @@ export function ActivityList() {
       if (!isKeyLoading && !hasKey) {
         if (isMounted) {
           setDecryptedActivities(rawActivities)
-          lastDecryptedRef.current = { key: stableKey, withKey: false }
+          setDecryptionError(false)
+          lastDecryptedRef.current = {
+            activityKey: stableKey,
+            encryptionKey: null,
+          }
         }
         return
       }
@@ -152,13 +174,21 @@ export function ActivityList() {
         const decrypted = await decryptActivities(rawActivities, encryptionKey)
         if (isMounted) {
           setDecryptedActivities(decrypted)
-          lastDecryptedRef.current = { key: stableKey, withKey: true }
+          setDecryptionError(false)
+          lastDecryptedRef.current = {
+            activityKey: stableKey,
+            encryptionKey,
+          }
         }
       } catch (error) {
         console.warn('Failed to decrypt activities:', error)
         if (isMounted) {
-          setDecryptedActivities(rawActivities)
-          lastDecryptedRef.current = { key: stableKey, withKey: true }
+          setDecryptedActivities([])
+          setDecryptionError(true)
+          lastDecryptedRef.current = {
+            activityKey: stableKey,
+            encryptionKey,
+          }
         }
       }
     }
@@ -178,6 +208,8 @@ export function ActivityList() {
   }, [fetchNextPage, hasMore, inView, isLoading])
 
   if (isLoading) return <ActivitiesLoading />
+
+  if (decryptionError) return <EncryptionRequired groupId={groupId} />
 
   const groupedActivitiesByDate = getGroupedActivitiesByDate(activities)
 

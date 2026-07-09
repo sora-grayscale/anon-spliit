@@ -3,13 +3,17 @@ import Decimal from 'decimal.js'
 
 import * as z from 'zod'
 
+const ENCRYPTED_STRING_MIN_LENGTH = 39
+const looksLikeEncryptedPayload = (value: string): boolean =>
+  value.length >= ENCRYPTED_STRING_MIN_LENGTH && /^[A-Za-z0-9_-]+$/.test(value)
+
 export const groupFormSchema = z
   .object({
     name: z.string().min(2, 'min2').max(50, 'max50'),
     information: z.string().optional(),
     // Currency fields can be encrypted strings (Issue #22)
-    currency: z.string().min(1, 'min1'), // No max - encrypted strings are longer
-    currencyCode: z.union([z.string().nullish(), z.literal('')]), // ISO-4217 code or encrypted string
+    currency: z.string().min(1, 'min1').max(500, 'max500'),
+    currencyCode: z.union([z.string().max(500).nullish(), z.literal('')]), // ISO-4217 code or encrypted string
     participants: z
       .array(
         z.object({
@@ -24,7 +28,28 @@ export const groupFormSchema = z
     passwordHint: z.string().max(100, 'max100').optional(),
     passwordSalt: z.string().optional(), // Base64 encoded salt, stored in DB
   })
-  .superRefine(({ participants }, ctx) => {
+  .superRefine(({ currency, currencyCode, participants }, ctx) => {
+    const hasPlainCurrencyCode =
+      typeof currencyCode === 'string' &&
+      currencyCode.length > 0 &&
+      !looksLikeEncryptedPayload(currencyCode)
+
+    if (hasPlainCurrencyCode && currencyCode.length > 3) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'max3',
+        path: ['currencyCode'],
+      })
+    }
+
+    if (!looksLikeEncryptedPayload(currency) && currency.length > 5) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'max5',
+        path: ['currency'],
+      })
+    }
+
     participants.forEach((participant, i) => {
       participants.slice(0, i).forEach((otherParticipant) => {
         if (otherParticipant.name === participant.name) {

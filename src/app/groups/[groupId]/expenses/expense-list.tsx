@@ -1,6 +1,7 @@
 'use client'
 import { ExpenseCard } from '@/app/groups/[groupId]/expenses/expense-card'
 import { useEncryption } from '@/components/encryption-provider'
+import { EncryptionRequired } from '@/components/encryption-required'
 import { Button } from '@/components/ui/button'
 import { SearchBar } from '@/components/ui/search-bar'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -153,19 +154,26 @@ const ExpenseListForSearch = ({
   // a late async setState after unmount (Issue #53).
   const [decryptedExpenses, setDecryptedExpenses] =
     useState<typeof rawExpenses>(undefined)
+  const [decryptionError, setDecryptionError] = useState(false)
 
   useEffect(() => {
     let isMounted = true
 
     async function decrypt() {
       if (!rawExpenses) {
-        if (isMounted) setDecryptedExpenses(undefined)
+        if (isMounted) {
+          setDecryptedExpenses(undefined)
+          setDecryptionError(false)
+        }
         return
       }
 
       // If no encryption key, use original data
       if (!isKeyLoading && !hasKey) {
-        if (isMounted) setDecryptedExpenses(rawExpenses)
+        if (isMounted) {
+          setDecryptedExpenses(rawExpenses)
+          setDecryptionError(false)
+        }
         return
       }
 
@@ -175,10 +183,16 @@ const ExpenseListForSearch = ({
 
       try {
         const decrypted = await decryptExpenses(rawExpenses, encryptionKey)
-        if (isMounted) setDecryptedExpenses(decrypted)
+        if (isMounted) {
+          setDecryptedExpenses(decrypted)
+          setDecryptionError(false)
+        }
       } catch (error) {
         console.warn('Failed to decrypt expenses:', error)
-        if (isMounted) setDecryptedExpenses(rawExpenses)
+        if (isMounted) {
+          setDecryptedExpenses([])
+          setDecryptionError(true)
+        }
       }
     }
 
@@ -220,6 +234,8 @@ const ExpenseListForSearch = ({
   )
 
   if (isLoading) return <ExpensesLoading />
+
+  if (decryptionError) return <EncryptionRequired groupId={groupId} />
 
   if (displayExpenses.length === 0)
     return (
