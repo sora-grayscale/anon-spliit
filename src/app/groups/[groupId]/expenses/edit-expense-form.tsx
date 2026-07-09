@@ -1,5 +1,6 @@
 'use client'
 import { useEncryption } from '@/components/encryption-provider'
+import { EncryptionRequired } from '@/components/encryption-required'
 import { decryptExpense, encryptExpenseFormValues } from '@/lib/encrypt-helpers'
 import { invalidateAggregate } from '@/lib/hooks/aggregateCache'
 import { trpc } from '@/trpc/client'
@@ -37,19 +38,26 @@ export function EditExpenseForm({
   // (Issue #53).
   const [decryptedExpense, setDecryptedExpense] =
     useState<typeof expense>(undefined)
+  const [decryptionError, setDecryptionError] = useState(false)
 
   useEffect(() => {
     let isMounted = true
 
     async function decrypt() {
       if (!expense) {
-        if (isMounted) setDecryptedExpense(undefined)
+        if (isMounted) {
+          setDecryptedExpense(undefined)
+          setDecryptionError(false)
+        }
         return
       }
 
       // If no encryption key, use original data
       if (!isKeyLoading && !hasKey) {
-        if (isMounted) setDecryptedExpense(expense)
+        if (isMounted) {
+          setDecryptedExpense(expense)
+          setDecryptionError(false)
+        }
         return
       }
 
@@ -59,10 +67,16 @@ export function EditExpenseForm({
 
       try {
         const decrypted = await decryptExpense(expense, encryptionKey)
-        if (isMounted) setDecryptedExpense(decrypted)
+        if (isMounted) {
+          setDecryptedExpense(decrypted)
+          setDecryptionError(false)
+        }
       } catch (error) {
         console.warn('Failed to decrypt expense:', error)
-        if (isMounted) setDecryptedExpense(expense)
+        if (isMounted) {
+          setDecryptedExpense(undefined)
+          setDecryptionError(true)
+        }
       }
     }
 
@@ -80,6 +94,8 @@ export function EditExpenseForm({
 
   const utils = trpc.useUtils()
   const router = useRouter()
+
+  if (decryptionError) return <EncryptionRequired groupId={groupId} />
 
   if (!group || !categories || !decryptedExpense) return null
 

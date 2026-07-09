@@ -40,7 +40,11 @@ function GroupLayoutInner({
   const [isDecrypting, setIsDecrypting] = useState(false)
   const [needsEncryptionKey, setNeedsEncryptionKey] = useState(false)
   // Track both group ID and whether we used encryption key
-  const lastDecryptedRef = useRef<{ id: string; withKey: boolean } | null>(null)
+  const lastDecryptedRef = useRef<{
+    id: string
+    name: string
+    encryptionKey: Uint8Array | null
+  } | null>(null)
 
   // Memoize group to avoid reference changes
   const group = data?.group
@@ -69,12 +73,13 @@ function GroupLayoutInner({
       }
 
       // Check if we need to re-decrypt (different group or encryption state changed)
-      const shouldDecryptWithKey = hasKey && encryptionKey !== null
-      const alreadyDecrypted = lastDecryptedRef.current?.id === group.id
-      const keyStateMatches =
-        lastDecryptedRef.current?.withKey === shouldDecryptWithKey
+      const alreadyDecrypted =
+        lastDecryptedRef.current?.id === group.id &&
+        lastDecryptedRef.current?.name === group.name
+      const keyMatches =
+        lastDecryptedRef.current?.encryptionKey === encryptionKey
 
-      if (alreadyDecrypted && keyStateMatches) {
+      if (alreadyDecrypted && keyMatches) {
         return // Already decrypted with same key state
       }
 
@@ -94,7 +99,11 @@ function GroupLayoutInner({
         // Legacy/unencrypted group
         if (isMounted) {
           setDecryptedGroup(group)
-          lastDecryptedRef.current = { id: group.id, withKey: false }
+          lastDecryptedRef.current = {
+            id: group.id,
+            name: group.name,
+            encryptionKey: null,
+          }
           setNeedsEncryptionKey(false)
         }
         return
@@ -112,13 +121,18 @@ function GroupLayoutInner({
         const decrypted = await decryptGroup(group, encryptionKey)
         if (isMounted) {
           setDecryptedGroup(decrypted)
-          lastDecryptedRef.current = { id: group.id, withKey: true }
+          lastDecryptedRef.current = {
+            id: group.id,
+            name: group.name,
+            encryptionKey,
+          }
         }
       } catch (error) {
-        console.warn('Failed to decrypt group, using original data:', error)
+        console.warn('Failed to decrypt group:', error)
         if (isMounted) {
-          setDecryptedGroup(group)
-          lastDecryptedRef.current = { id: group.id, withKey: true }
+          setDecryptedGroup(null)
+          lastDecryptedRef.current = null
+          setNeedsEncryptionKey(true)
         }
       } finally {
         if (isMounted) {

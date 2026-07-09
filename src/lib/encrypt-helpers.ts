@@ -8,6 +8,19 @@
 import { decrypt, decryptNumber, encrypt, encryptNumber } from './crypto'
 import { ExpenseFormValues, GroupFormValues } from './schemas'
 
+export class EncryptedDataDecryptionError extends Error {
+  readonly entity: 'group' | 'expense' | 'activity'
+  readonly reason = 'invalid-ciphertext-or-key'
+  readonly cause: unknown
+
+  constructor(entity: 'group' | 'expense' | 'activity', cause: unknown) {
+    super(`Failed to decrypt encrypted ${entity} data`)
+    this.name = 'EncryptedDataDecryptionError'
+    this.entity = entity
+    this.cause = cause
+  }
+}
+
 // Type for expense data with encrypted amounts (stored in DB)
 export interface EncryptedExpenseData {
   title: string // encrypted
@@ -91,11 +104,22 @@ export async function decryptGroup<
     participants: Array<{ id: string; name: string }>
   },
 >(group: T, encryptionKey: Uint8Array): Promise<T> {
+  const groupNameLooksEncrypted = looksEncrypted(group.name)
+  const groupLooksEncrypted =
+    groupNameLooksEncrypted &&
+    (looksEncrypted(group.currency) ||
+      Boolean(group.currencyCode && looksEncrypted(group.currencyCode)) ||
+      group.participants.some((p) => looksEncrypted(p.name)) ||
+      Boolean(group.information && looksEncrypted(group.information)))
+
   try {
-    const decryptedName = await decrypt(group.name, encryptionKey)
-    const decryptedInformation = group.information
-      ? await decrypt(group.information, encryptionKey)
-      : null
+    const decryptedName = groupNameLooksEncrypted
+      ? await decrypt(group.name, encryptionKey)
+      : group.name
+    const decryptedInformation =
+      group.information && looksEncrypted(group.information)
+        ? await decrypt(group.information, encryptionKey)
+        : group.information
 
     // Decrypt currency fields (Issue #22 - E2EE for currency)
     // Handle backward compatibility for legacy unencrypted data
@@ -110,7 +134,9 @@ export async function decryptGroup<
     const decryptedParticipants = await Promise.all(
       group.participants.map(async (p) => ({
         ...p,
-        name: await decrypt(p.name, encryptionKey),
+        name: looksEncrypted(p.name)
+          ? await decrypt(p.name, encryptionKey)
+          : p.name,
       })),
     )
 
@@ -122,7 +148,11 @@ export async function decryptGroup<
       currencyCode: decryptedCurrencyCode,
       participants: decryptedParticipants,
     }
-  } catch {
+  } catch (error) {
+    if (groupLooksEncrypted) {
+      throw new EncryptedDataDecryptionError('group', error)
+    }
+
     // If decryption fails, return original data (might be unencrypted legacy data)
     // Note: Don't log error details as they may contain sensitive information
     console.warn(
@@ -230,8 +260,28 @@ export async function decryptExpense<
     }>
   },
 >(expense: T, encryptionKey: Uint8Array): Promise<T> {
+  const expenseTitleLooksEncrypted = looksEncrypted(expense.title)
+  const expenseLooksEncrypted =
+    expenseTitleLooksEncrypted &&
+    ((typeof expense.amount === 'string' && looksEncrypted(expense.amount)) ||
+      Boolean(expense.notes && looksEncrypted(expense.notes)) ||
+      (typeof expense.categoryId === 'string' &&
+        looksEncrypted(expense.categoryId)) ||
+      (typeof expense.originalAmount === 'string' &&
+        looksEncrypted(expense.originalAmount)) ||
+      Boolean(
+        expense.originalCurrency && looksEncrypted(expense.originalCurrency),
+      ) ||
+      Boolean(
+        expense.paidFor?.some(
+          (pf) =>
+            (typeof pf.shares === 'string' && looksEncrypted(pf.shares)) ||
+            (pf.participant && looksEncrypted(pf.participant.name)),
+        ),
+      ))
+
   try {
-    const decryptedTitle = looksEncrypted(expense.title)
+    const decryptedTitle = expenseTitleLooksEncrypted
       ? await decrypt(expense.title, encryptionKey)
       : expense.title
     const decryptedNotes =
@@ -358,7 +408,11 @@ export async function decryptExpense<
     }
 
     return result as T
-  } catch {
+  } catch (error) {
+    if (expenseLooksEncrypted) {
+      throw new EncryptedDataDecryptionError('expense', error)
+    }
+
     // If decryption fails, return original data (might be unencrypted legacy data)
     // Note: Don't log error details as they may contain sensitive information
     console.warn(
@@ -406,9 +460,8 @@ export async function decryptActivity<
       ...activity,
       data: decryptedData,
     }
-  } catch {
-    // If decryption fails, return original data (might be unencrypted legacy data)
-    return activity
+  } catch (error) {
+    throw new EncryptedDataDecryptionError('activity', error)
   }
 }
 

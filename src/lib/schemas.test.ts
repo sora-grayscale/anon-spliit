@@ -6,6 +6,7 @@ import {
   EXPENSE_DATE_MAX_YEARS_FUTURE,
   EXPENSE_DATE_MIN_YEARS_PAST,
   expenseFormSchema,
+  groupFormSchema,
 } from './schemas'
 
 const MS_PER_YEAR = 365 * 24 * 60 * 60 * 1000
@@ -26,6 +27,59 @@ function makeBaseExpense(overrides: Record<string, unknown> = {}) {
     ...overrides,
   }
 }
+
+function makeBaseGroup(overrides: Record<string, unknown> = {}) {
+  return {
+    name: 'Trip',
+    information: undefined,
+    currency: '$',
+    currencyCode: 'USD',
+    participants: [{ name: 'Alice' }],
+    ...overrides,
+  }
+}
+
+describe('groupFormSchema currency bounds (Issue #187)', () => {
+  it('rejects oversized plaintext custom currency values', () => {
+    const result = groupFormSchema.safeParse(
+      makeBaseGroup({ currency: 'TOOLONG', currencyCode: '' }),
+    )
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      const currencyIssue = result.error.issues.find((i) =>
+        i.path.includes('currency'),
+      )
+      expect(currencyIssue?.message).toBe('max5')
+    }
+  })
+
+  it('rejects oversized plaintext currency values even with a currency code', () => {
+    const result = groupFormSchema.safeParse(
+      makeBaseGroup({ currency: 'TOOLONG', currencyCode: 'USD' }),
+    )
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      const currencyIssue = result.error.issues.find((i) =>
+        i.path.includes('currency'),
+      )
+      expect(currencyIssue?.message).toBe('max5')
+    }
+  })
+
+  it('accepts encrypted currency payloads', () => {
+    const encryptedPayload = 'A'.repeat(39)
+    const result = groupFormSchema.safeParse(
+      makeBaseGroup({
+        currency: encryptedPayload,
+        currencyCode: encryptedPayload,
+      }),
+    )
+
+    expect(result.success).toBe(true)
+  })
+})
 
 describe('expenseFormSchema expenseDate bounds (Issue #133)', () => {
   it('accepts current date', () => {

@@ -10,6 +10,11 @@ jest.mock('@/app/groups/[groupId]/expenses/expense-card', () => ({
 jest.mock('@/components/encryption-provider', () => ({
   useEncryption: jest.fn(),
 }))
+jest.mock('@/components/encryption-required', () => ({
+  EncryptionRequired: ({ groupId }: { groupId: string }) => (
+    <div data-testid="encryption-required">{groupId}</div>
+  ),
+}))
 jest.mock('@/components/ui/button', () => ({
   Button: ({ children }: { children: React.ReactNode }) => (
     <button>{children}</button>
@@ -222,5 +227,24 @@ describe('ExpenseList', () => {
       await new Promise((r) => setTimeout(r, 20))
     })
     expect(mockDecryptExpenses).not.toHaveBeenCalled()
+  })
+
+  it('does not render ciphertext when decryption fails (Issue #188)', async () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    mockDecryptExpenses.mockRejectedValue(new Error('wrong key'))
+    trpcMocks.__mockUseInfiniteQuery.mockReturnValue(
+      infiniteQueryReturn([fakeExpense('a', 'ciphertext-title')]),
+    )
+
+    try {
+      const { queryByText, getByTestId } = render(<ExpenseList />)
+
+      await waitFor(() =>
+        expect(getByTestId('encryption-required').textContent).toBe('g1'),
+      )
+      expect(queryByText('ciphertext-title')).toBeNull()
+    } finally {
+      warnSpy.mockRestore()
+    }
   })
 })

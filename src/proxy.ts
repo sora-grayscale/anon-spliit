@@ -4,16 +4,9 @@
  * Note: Migrated from middleware.ts for Next.js 16 compatibility
  */
 
+import { interpretEnvVarAsBool } from '@/lib/env-bool'
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
-
-// Check if private instance mode is enabled
-// Must match env.ts interpretEnvVarAsBool logic
-function isPrivateInstanceEnabled(): boolean {
-  const val = process.env.PRIVATE_INSTANCE
-  if (typeof val !== 'string') return false
-  return ['true', 'yes', '1', 'on'].includes(val.toLowerCase())
-}
 
 // Routes that don't require authentication even in private mode
 const publicRoutes = [
@@ -36,7 +29,7 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Check if private instance mode is enabled
-  const isPrivateInstance = isPrivateInstanceEnabled()
+  const isPrivateInstance = interpretEnvVarAsBool(process.env.PRIVATE_INSTANCE)
 
   if (!isPrivateInstance) {
     // Public instance - block auth pages (they require SessionProvider)
