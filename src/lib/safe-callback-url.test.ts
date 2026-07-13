@@ -15,10 +15,30 @@ describe('sanitizeCallbackUrl', () => {
     )
   })
 
-  it('rejects absolute URLs', () => {
+  it('rejects cross-origin absolute URLs', () => {
     expect(sanitizeCallbackUrl('https://evil.example')).toBe('/')
     expect(sanitizeCallbackUrl('http://evil.example/path')).toBe('/')
     expect(sanitizeCallbackUrl('javascript:alert(1)')).toBe('/')
+    // Origin must match exactly: different port, prefix-alike host, and
+    // userinfo tricks are all cross-origin. (jsdom origin: http://localhost)
+    expect(sanitizeCallbackUrl('http://localhost:3000/admin')).toBe('/')
+    expect(sanitizeCallbackUrl('http://localhost.evil.example/x')).toBe('/')
+    expect(sanitizeCallbackUrl('http://localhost@evil.example/x')).toBe('/')
+  })
+
+  it('reduces same-origin absolute URLs (Auth.js normalization) to their path', () => {
+    // @auth/core's default redirect callback turns callbackUrl=/admin into
+    // an absolute baseUrl + '/admin' before it reaches the sign-in page.
+    expect(sanitizeCallbackUrl('http://localhost/admin')).toBe('/admin')
+    expect(sanitizeCallbackUrl('http://localhost/groups/abc?tab=1#top')).toBe(
+      '/groups/abc?tab=1#top',
+    )
+    expect(sanitizeCallbackUrl('HTTP://LOCALHOST/admin')).toBe('/admin')
+    expect(sanitizeCallbackUrl('http://localhost')).toBe('/')
+  })
+
+  it('does not let a same-origin URL smuggle a protocol-relative path', () => {
+    expect(sanitizeCallbackUrl('http://localhost//evil.example')).toBe('/')
   })
 
   it('rejects protocol-relative URLs', () => {
