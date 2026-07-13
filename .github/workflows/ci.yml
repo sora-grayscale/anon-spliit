@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: ['main']
 
+# Least privilege for GITHUB_TOKEN: every job here only reads the repo. The
+# Docker smoke build's GHA cache uses the runner's ACTIONS_RUNTIME_TOKEN, not
+# GITHUB_TOKEN, so it is unaffected. Release/publish lives in cd.yml.
+permissions:
+  contents: read
+
 jobs:
   lint-and-typecheck:
     runs-on: ubuntu-latest
@@ -104,3 +110,26 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+  docker-smoke-build:
+    # Builds the production image the same way releases do, so a broken
+    # Dockerfile (e.g. a missing COPY for a file imported by next.config.mjs)
+    # fails the PR. A plain `pnpm build` does not exercise the Dockerfile.
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (single platform, no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: false
+          tags: anon-spliit:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -22,7 +22,10 @@ export function ShareUrlButton({ url, text }: Props) {
         if (navigator.share) {
           navigator.share({ text, url })
         } else {
-          console.log('Sharing is not available', { text, url })
+          // Do not log `url`/`text`: the share URL contains the encryption key
+          // in its fragment, and logging it would expose key material to the
+          // console (DevTools, extensions, screen shares).
+          console.warn('Web Share API is not available')
         }
       }}
     >
