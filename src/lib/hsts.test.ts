@@ -1,4 +1,4 @@
-import { buildHstsHeader } from '../../hsts.config.mjs'
+import { buildHstsHeader } from './hsts'
 
 describe('buildHstsHeader', () => {
   it('defaults to a 2-year policy without includeSubDomains', () => {
@@ -34,7 +34,7 @@ describe('buildHstsHeader', () => {
     )
   })
 
-  it('sends no header at all when HSTS_ENABLED is false', () => {
+  it('returns null (app sends no header) when HSTS_ENABLED is false', () => {
     expect(buildHstsHeader({ HSTS_ENABLED: 'false' })).toBeNull()
     expect(buildHstsHeader({ HSTS_ENABLED: 'off' })).toBeNull()
     expect(buildHstsHeader({ HSTS_ENABLED: '0' })).toBeNull()

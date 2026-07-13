@@ -1,12 +1,11 @@
 import createNextIntlPlugin from 'next-intl/plugin'
-import { buildHstsHeader } from './hsts.config.mjs'
 
 const withNextIntl = createNextIntlPlugin()
 
-// Evaluated at config load time so invalid HSTS_* values fail the build.
-// See hsts.config.mjs for the env contract and the reasoning behind the
-// subdomain-unaffecting default (full CSP is tracked separately in #194).
-const hstsHeader = buildHstsHeader(process.env)
+// NOTE: HSTS is intentionally NOT set here. `headers()` is evaluated at build
+// time and frozen into `.next`, so a prebuilt image (Docker/Vercel) could not
+// honor runtime env (container.env). HSTS is emitted at runtime from the proxy
+// instead — see src/lib/hsts.ts and src/proxy.ts. Full CSP is tracked in #194.
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -22,7 +21,6 @@ const nextConfig = {
       {
         source: '/(.*)',
         headers: [
-          ...(hstsHeader ? [hstsHeader] : []),
           {
             key: 'X-Frame-Options',
             value: 'DENY',
