@@ -12,19 +12,27 @@
  * Tab/newline/carriage-return characters are stripped first because browsers
  * ignore them when parsing URLs, which would otherwise let `\t//host` slip
  * through the checks.
+ *
+ * The `fallback` is held to the same rules, so a future caller cannot smuggle
+ * an absolute URL through the fallback parameter; an unsafe fallback degrades
+ * to `/`.
  */
-export function sanitizeCallbackUrl(
-  raw: string | null | undefined,
-  fallback: string = '/',
-): string {
-  if (!raw) return fallback
+function sanitize(raw: string | null | undefined): string | null {
+  if (!raw) return null
 
   const normalized = raw.replace(/[\t\n\r]/g, '').replace(/\\/g, '/')
 
   // Must be a single-slash absolute path rooted at our own origin.
   if (!normalized.startsWith('/') || normalized.startsWith('//')) {
-    return fallback
+    return null
   }
 
   return normalized
+}
+
+export function sanitizeCallbackUrl(
+  raw: string | null | undefined,
+  fallback: string = '/',
+): string {
+  return sanitize(raw) ?? sanitize(fallback) ?? '/'
 }

@@ -40,4 +40,37 @@ describe('sanitizeCallbackUrl', () => {
     expect(sanitizeCallbackUrl(null, '/home')).toBe('/home')
     expect(sanitizeCallbackUrl('https://evil.example', '/home')).toBe('/home')
   })
+
+  it('returns the normalized string, which is what reaches router.replace', () => {
+    // The return value has the stripped control characters removed, not just
+    // the accept/reject decision made from them.
+    expect(sanitizeCallbackUrl('/a\r\nb')).toBe('/ab')
+  })
+
+  it('rejects a leading space (no longer starts with "/")', () => {
+    // A space is not in the strip set, so ' /path' does not start with '/'.
+    expect(sanitizeCallbackUrl(' /path')).toBe('/')
+  })
+
+  it('rejects control characters outside the strip set', () => {
+    expect(sanitizeCallbackUrl('\f/evil')).toBe('/')
+    expect(sanitizeCallbackUrl('\x00/x')).toBe('/')
+  })
+
+  it('passes through same-origin oddities the browser resolves locally', () => {
+    // The browser resolves these against our own origin, so they stay
+    // same-origin and are accepted by design.
+    expect(sanitizeCallbackUrl('/%2F%2Fevil.example')).toBe(
+      '/%2F%2Fevil.example',
+    )
+    expect(sanitizeCallbackUrl('/..//evil.example')).toBe('/..//evil.example')
+  })
+
+  it('holds the fallback to the same rules', () => {
+    expect(
+      sanitizeCallbackUrl('https://evil.example', 'https://evil2.example'),
+    ).toBe('/')
+    expect(sanitizeCallbackUrl(null, '/custom')).toBe('/custom')
+    expect(sanitizeCallbackUrl(undefined, '//evil')).toBe('/')
+  })
 })

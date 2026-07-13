@@ -14,13 +14,17 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { sanitizeCallbackUrl } from '@/lib/safe-callback-url'
 import { signIn } from 'next-auth/react'
 import { useSearchParams } from 'next/navigation'
 import { useState } from 'react'
 
 export default function SignInPage() {
   const searchParams = useSearchParams()
-  const callbackUrl = searchParams.get('callbackUrl') || '/'
+  // Defense-in-depth: Auth.js origin-locks redirects server-side, but we also
+  // sanitize here for consistency with the verify-2fa pages rather than depend
+  // on the framework default staying default.
+  const callbackUrl = sanitizeCallbackUrl(searchParams.get('callbackUrl'))
   const error = searchParams.get('error')
 
   const [email, setEmail] = useState('')
