@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { sanitizeCallbackUrl } from '@/lib/safe-callback-url'
 import { AlertCircle, KeyRound, Loader2, ShieldCheck } from 'lucide-react'
 import { useSession } from 'next-auth/react'
 import { useTranslations } from 'next-intl'
@@ -30,7 +31,7 @@ export default function Verify2FAPage() {
   const t = useTranslations('TwoFactorAuth')
   const router = useRouter()
   const searchParams = useSearchParams()
-  const callbackUrl = searchParams.get('callbackUrl') || '/'
+  const callbackUrl = sanitizeCallbackUrl(searchParams.get('callbackUrl'))
 
   const { data: session, status, update } = useSession()
 

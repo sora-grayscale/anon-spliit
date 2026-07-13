@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { sanitizeCallbackUrl } from '@/lib/safe-callback-url'
 import {
   AlertCircle,
   AlertTriangle,
@@ -37,7 +38,7 @@ export default function BackupCodePage() {
   const t = useTranslations('TwoFactorAuth')
   const router = useRouter()
   const searchParams = useSearchParams()
-  const callbackUrl = searchParams.get('callbackUrl') || '/'
+  const callbackUrl = sanitizeCallbackUrl(searchParams.get('callbackUrl'))
 
   const { data: session, status, update } = useSession()
 
