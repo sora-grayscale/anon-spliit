@@ -40,9 +40,11 @@ describe('reimbursement-prefill', () => {
   })
 
   it('does not collide when ids contain the delimiter character', () => {
+    // Both triples flatten to the same 'g:a:b:c' under a naive ':' join, so
+    // this fails against a delimiter-joined key scheme.
     setReimbursementAmount('g', 'a:b', 'c', 1)
-    setReimbursementAmount('g:a', 'b:c', '', 2)
+    setReimbursementAmount('g:a', 'b', 'c', 2)
     expect(getReimbursementAmount('g', 'a:b', 'c')).toBe(1)
-    expect(getReimbursementAmount('g:a', 'b:c', '')).toBe(2)
+    expect(getReimbursementAmount('g:a', 'b', 'c')).toBe(2)
   })
 })

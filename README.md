@@ -187,9 +187,12 @@ NEXTAUTH_URL=https://your-domain.com
 ### HSTS / Strict-Transport-Security (Optional)
 
 ```bash
-HSTS_ENABLED=true              # Optional - default true; set false to delegate HSTS to the hosting layer
-HSTS_MAX_AGE=63072000          # Optional - default 63072000 seconds (2 years); non-negative integer
-HSTS_INCLUDE_SUBDOMAINS=false  # Optional - default false; enable only after confirming every subdomain serves TLS
+# Optional - default true; set false to delegate HSTS to the hosting layer
+HSTS_ENABLED=true
+# Optional - default 63072000 seconds (2 years); non-negative integer
+HSTS_MAX_AGE=63072000
+# Optional - default false; enable only after confirming every subdomain serves TLS
+HSTS_INCLUDE_SUBDOMAINS=false
 ```
 
 Applied at runtime by the proxy - see [container.env.example](container.env.example) for restart/redeploy and validation caveats.
