@@ -35,6 +35,7 @@ import {
 import { Locale } from '@/i18n/request'
 import { defaultCurrencyList, getCurrency } from '@/lib/currency'
 import { useActiveUser, useCurrencyRate } from '@/lib/hooks'
+import { getReimbursementAmount } from '@/lib/reimbursement-prefill'
 import {
   ExpenseFormValues,
   SplittingOptions,
@@ -220,7 +221,11 @@ export function ExpenseForm({
             title: t('reimbursement'),
             expenseDate: new Date(),
             amount: amountAsDecimal(
-              Number(searchParams.get('amount')) || 0,
+              getReimbursementAmount(
+                group.id,
+                searchParams.get('from') ?? '',
+                searchParams.get('to') ?? '',
+              ) ?? 0,
               groupCurrency,
             ),
             originalCurrency: group.currencyCode,
