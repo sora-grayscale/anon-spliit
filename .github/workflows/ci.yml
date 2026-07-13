@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: ['main']
 
+# Least privilege for GITHUB_TOKEN: every job here only reads the repo. The
+# Docker smoke build's GHA cache uses the runner's ACTIONS_RUNTIME_TOKEN, not
+# GITHUB_TOKEN, so it is unaffected. Release/publish lives in cd.yml.
+permissions:
+  contents: read
+
 jobs:
   lint-and-typecheck:
     runs-on: ubuntu-latest
