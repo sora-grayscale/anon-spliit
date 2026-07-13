@@ -112,9 +112,16 @@ jobs:
         run: pnpm build
 
   docker-smoke-build:
-    # Builds the production image the same way releases do, so a broken
-    # Dockerfile (e.g. a missing COPY for a file imported by next.config.mjs)
-    # fails the PR. A plain `pnpm build` does not exercise the Dockerfile.
+    # Validates the Dockerfile (e.g. catches a missing COPY for a file
+    # imported by next.config.mjs) on a single platform (amd64), with no
+    # push. A plain `pnpm build` does not exercise the Dockerfile at all.
+    #
+    # This is NOT multi-arch parity with the release build: cd.yml builds
+    # linux/amd64 + linux/arm64 with QEMU, so an arm64-only breakage is still
+    # only caught at release time, not here.
+    #
+    # Intentionally has no `needs:` so Docker feedback lands in parallel with
+    # lint/test on PRs, rather than waiting on them.
     runs-on: ubuntu-latest
 
     steps:
