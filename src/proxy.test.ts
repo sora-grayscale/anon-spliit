@@ -1,6 +1,6 @@
 /** @jest-environment node */
 
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 
 // Env keys that influence the proxy. HSTS_* are read at module load (so the
 // module must be re-imported per case); PRIVATE_INSTANCE is read per request.
@@ -30,18 +30,22 @@ afterEach(() => {
   jest.resetModules()
 })
 
-// Load a fresh copy of the proxy with the given env so the module-level
+// Load a fresh copy of the proxy module with the given env so the module-level
 // buildHstsHeader() call is re-evaluated per case (no env bleed between tests).
-async function loadProxy(env: EnvOverrides) {
+async function loadProxyModule(env: EnvOverrides) {
   for (const key of MANAGED_ENV_KEYS) {
     if (env[key] === undefined) delete process.env[key]
     else process.env[key] = env[key]
   }
-  let proxy!: typeof import('./proxy').proxy
+  let mod!: typeof import('./proxy')
   await jest.isolateModulesAsync(async () => {
-    ;({ proxy } = await import('./proxy'))
+    mod = await import('./proxy')
   })
-  return proxy
+  return mod
+}
+
+async function loadProxy(env: EnvOverrides) {
+  return (await loadProxyModule(env)).proxy
 }
 
 function request(path: string, init?: { cookie?: string }) {
@@ -101,11 +105,72 @@ describe('proxy HSTS emission', () => {
   })
 
   it('fails closed: importing the proxy throws on an invalid HSTS value', async () => {
+    // Clear ALL managed keys first so an ambient HSTS_ENABLED=false in a dev
+    // shell cannot influence the result. Validation is unconditional now, but
+    // the test stays ambient-proof regardless. afterEach restores the shell env.
+    for (const key of MANAGED_ENV_KEYS) delete process.env[key]
     process.env.HSTS_MAX_AGE = 'not-a-number'
     await expect(
       jest.isolateModulesAsync(async () => {
         await import('./proxy')
       }),
     ).rejects.toThrow(/HSTS_MAX_AGE/)
+  })
+})
+
+describe('proxy routing branches (private instance)', () => {
+  it('redirects unauthenticated /groups/create to signin with callbackUrl', async () => {
+    const proxy = await loadProxy({ PRIVATE_INSTANCE: 'true' })
+    const res = await proxy(request('/groups/create'))
+    expect(res.status).toBe(307)
+    expect(res.headers.get('location')).toBe(
+      'http://localhost/auth/signin?callbackUrl=%2Fgroups%2Fcreate',
+    )
+    expect(res.headers.get(HSTS)).toBe('max-age=63072000')
+  })
+
+  it('passes a static asset (.png) through with HSTS and no redirect', async () => {
+    const proxy = await loadProxy({ PRIVATE_INSTANCE: 'true' })
+    const res = await proxy(request('/logo.png'))
+    expect(res.headers.get('location')).toBeNull()
+    expect(res.headers.get(HSTS)).toBe('max-age=63072000')
+  })
+
+  it('allows /admin with a session cookie (no redirect) and sets HSTS', async () => {
+    const proxy = await loadProxy({ PRIVATE_INSTANCE: 'true' })
+    const res = await proxy(
+      request('/admin', { cookie: 'authjs.session-token=x' }),
+    )
+    expect(res.headers.get('location')).toBeNull()
+    expect(res.headers.get(HSTS)).toBe('max-age=63072000')
+  })
+
+  it('passes an unlisted path through the final fallback with HSTS', async () => {
+    const proxy = await loadProxy({ PRIVATE_INSTANCE: 'true' })
+    const res = await proxy(request('/some-page'))
+    expect(res.headers.get('location')).toBeNull()
+    expect(res.headers.get(HSTS)).toBe('max-age=63072000')
+  })
+
+  it('serves a shared group link without a cookie and never redirects to signin', async () => {
+    // E2EE shared-group invariant: a group is protected by the key in the URL,
+    // so unauthenticated access to /groups/<id> must not bounce to signin.
+    const proxy = await loadProxy({ PRIVATE_INSTANCE: 'true' })
+    const res = await proxy(request('/groups/abc123'))
+    expect(res.headers.get('location')).toBeNull()
+    expect(res.headers.get(HSTS)).toBe('max-age=63072000')
+  })
+})
+
+describe('withSecurityHeaders', () => {
+  it('preserves Set-Cookie, status and Location while adding HSTS', async () => {
+    const { withSecurityHeaders } = await loadProxyModule({})
+    const res = NextResponse.redirect(new URL('http://localhost/x'))
+    res.cookies.set('foo', 'bar')
+    const out = withSecurityHeaders(res)
+    expect(out.status).toBe(307)
+    expect(out.headers.get('location')).toBe('http://localhost/x')
+    expect(out.headers.get('set-cookie')).toMatch(/foo=bar/)
+    expect(out.headers.get(HSTS)).toBe('max-age=63072000')
   })
 })
