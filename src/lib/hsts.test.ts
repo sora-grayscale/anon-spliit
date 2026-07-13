@@ -2,10 +2,7 @@ import { buildHstsHeader } from './hsts'
 
 describe('buildHstsHeader', () => {
   it('defaults to a 2-year policy without includeSubDomains', () => {
-    expect(buildHstsHeader({})).toEqual({
-      key: 'Strict-Transport-Security',
-      value: 'max-age=63072000',
-    })
+    expect(buildHstsHeader({})).toBe('max-age=63072000')
   })
 
   it('treats empty-string env values as unset', () => {
@@ -15,21 +12,17 @@ describe('buildHstsHeader', () => {
         HSTS_MAX_AGE: '',
         HSTS_INCLUDE_SUBDOMAINS: '',
       }),
-    ).toEqual({
-      key: 'Strict-Transport-Security',
-      value: 'max-age=63072000',
-    })
+    ).toBe('max-age=63072000')
   })
 
   it('appends includeSubDomains only on explicit opt-in', () => {
-    expect(buildHstsHeader({ HSTS_INCLUDE_SUBDOMAINS: 'true' })).toEqual({
-      key: 'Strict-Transport-Security',
-      value: 'max-age=63072000; includeSubDomains',
-    })
-    expect(buildHstsHeader({ HSTS_INCLUDE_SUBDOMAINS: 'on' })?.value).toBe(
+    expect(buildHstsHeader({ HSTS_INCLUDE_SUBDOMAINS: 'true' })).toBe(
       'max-age=63072000; includeSubDomains',
     )
-    expect(buildHstsHeader({ HSTS_INCLUDE_SUBDOMAINS: 'false' })?.value).toBe(
+    expect(buildHstsHeader({ HSTS_INCLUDE_SUBDOMAINS: 'on' })).toBe(
+      'max-age=63072000; includeSubDomains',
+    )
+    expect(buildHstsHeader({ HSTS_INCLUDE_SUBDOMAINS: 'false' })).toBe(
       'max-age=63072000',
     )
   })
@@ -41,14 +34,11 @@ describe('buildHstsHeader', () => {
   })
 
   it('honors a custom max-age', () => {
-    expect(buildHstsHeader({ HSTS_MAX_AGE: '300' })?.value).toBe('max-age=300')
+    expect(buildHstsHeader({ HSTS_MAX_AGE: '300' })).toBe('max-age=300')
   })
 
   it('keeps sending max-age=0 (policy deletion), distinct from disabling', () => {
-    expect(buildHstsHeader({ HSTS_MAX_AGE: '0' })).toEqual({
-      key: 'Strict-Transport-Security',
-      value: 'max-age=0',
-    })
+    expect(buildHstsHeader({ HSTS_MAX_AGE: '0' })).toBe('max-age=0')
   })
 
   it('throws on invalid HSTS_MAX_AGE values', () => {
@@ -72,5 +62,20 @@ describe('buildHstsHeader', () => {
     expect(() => buildHstsHeader({ HSTS_INCLUDE_SUBDOMAINS: 'yep' })).toThrow(
       /HSTS_INCLUDE_SUBDOMAINS/,
     )
+  })
+
+  it('validates HSTS_MAX_AGE even when HSTS_ENABLED=false (no dormant garbage)', () => {
+    expect(() =>
+      buildHstsHeader({ HSTS_ENABLED: 'false', HSTS_MAX_AGE: 'garbage' }),
+    ).toThrow(/HSTS_MAX_AGE/)
+  })
+
+  it('validates HSTS_INCLUDE_SUBDOMAINS even when HSTS_ENABLED=false', () => {
+    expect(() =>
+      buildHstsHeader({
+        HSTS_ENABLED: 'false',
+        HSTS_INCLUDE_SUBDOMAINS: 'banana',
+      }),
+    ).toThrow(/HSTS_INCLUDE_SUBDOMAINS/)
   })
 })

@@ -184,6 +184,19 @@ NEXTAUTH_SECRET=your-secret-key
 NEXTAUTH_URL=https://your-domain.com
 ```
 
+### HSTS / Strict-Transport-Security (Optional)
+
+```bash
+# Optional - default true; set false to delegate HSTS to the hosting layer
+HSTS_ENABLED=true
+# Optional - default 63072000 seconds (2 years); non-negative integer
+HSTS_MAX_AGE=63072000
+# Optional - default false; enable only after confirming every subdomain serves TLS
+HSTS_INCLUDE_SUBDOMAINS=false
+```
+
+Applied at runtime by the proxy - see [container.env.example](container.env.example) for restart/redeploy and validation caveats.
+
 ## Tech Stack
 
 | Category   | Technology                                 |
@@ -209,6 +222,10 @@ NEXTAUTH_URL=https://your-domain.com
 - Use password protection for sensitive financial data
 - Don't share URLs in screenshots (they contain your encryption key)
 - Self-host for maximum privacy
+
+### Transport Security
+
+The app sends a `Strict-Transport-Security` header at runtime from the proxy (2-year `max-age`, no `includeSubDomains` by default). This is configurable, or can be fully disabled to defer to your hosting layer, via the `HSTS_*` environment variables documented in [container.env.example](container.env.example).
 
 ## Contributing
 

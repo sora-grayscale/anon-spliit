@@ -35,7 +35,10 @@ import {
 import { Locale } from '@/i18n/request'
 import { defaultCurrencyList, getCurrency } from '@/lib/currency'
 import { useActiveUser, useCurrencyRate } from '@/lib/hooks'
-import { getReimbursementAmount } from '@/lib/reimbursement-prefill'
+import {
+  clearReimbursementAmount,
+  getReimbursementAmount,
+} from '@/lib/reimbursement-prefill'
 import {
   ExpenseFormValues,
   SplittingOptions,
@@ -220,6 +223,9 @@ export function ExpenseForm({
         ? {
             title: t('reimbursement'),
             expenseDate: new Date(),
+            // The prefill entry survives only client-side navigation; a hard
+            // reload reads 0 here and the user re-enters the amount. Accepted
+            // tradeoff — the amount must never ride the URL.
             amount: amountAsDecimal(
               getReimbursementAmount(
                 group.id,
@@ -252,6 +258,9 @@ export function ExpenseForm({
             expenseDate: searchParams.get('date')
               ? new Date(searchParams.get('date') as string)
               : new Date(),
+            // Seeds from externally-supplied deep links only. In-app code must
+            // never put client-derived (decrypted) amounts into the URL; the
+            // reimbursement flow uses the in-memory store instead.
             amount: Number(searchParams.get('amount')) || 0,
             originalCurrency: group.currencyCode ?? '',
             originalAmount: '',
@@ -295,6 +304,19 @@ export function ExpenseForm({
   })
 
   const activeUserId = useActiveUser(group.id)
+
+  // The prefill amount is read once into the form's default values above; drop
+  // it afterwards so a later navigation cannot resurrect a stale amount.
+  // Deleting after the initial render is idempotent and StrictMode-safe.
+  useEffect(() => {
+    if (searchParams.get('reimbursement')) {
+      clearReimbursementAmount(
+        group.id,
+        searchParams.get('from') ?? '',
+        searchParams.get('to') ?? '',
+      )
+    }
+  }, [group.id, searchParams])
 
   const submit = async (values: ExpenseFormValues) => {
     await persistDefaultSplittingOptions(group.id, values)

@@ -6,8 +6,10 @@
  * is evaluated at build time and frozen into `.next`, so a prebuilt Docker
  * image could never honor `container.env`. Emitting from the proxy lets
  * runtime env (container.env / platform env vars) actually control the header
- * — though changing that env still requires recreating/restarting the
- * container (or redeploying on Vercel); it is not hot-reloaded.
+ * — though it is not hot-reloaded, and re-reading changed env can be subtle: a
+ * plain `docker compose up -d` or `restart` may not re-read an edited env_file,
+ * so use `docker compose up -d --force-recreate` (podman compose likewise); on
+ * Vercel, redeploy.
  *
  * The default deliberately omits `includeSubDomains`: it is a default that
  * does not affect subdomains, NOT a harmless one — the serving host itself is
@@ -37,36 +39,21 @@
  *   `includeSubDomains`. Only do this after confirming that every subdomain
  *   is served over TLS. Default: off.
  *
- * Invalid values throw. The proxy evaluates this at module load and
+ * Keep values bare: many env-file parsers do NOT strip inline trailing
+ * comments, so `HSTS_MAX_AGE=63072000 # 2 years` is read literally (including
+ * the ` # 2 years` suffix) and fails startup validation.
+ *
+ * Validation is unconditional: all three variables are parsed before the
+ * enabled check, so an invalid value throws even when HSTS_ENABLED=false. This
+ * prevents latent garbage from lying dormant and only surfacing when HSTS is
+ * later re-enabled. The proxy evaluates this at module load and
  * instrumentation.ts re-validates at server startup, so a misconfiguration
  * fails loudly (fail-closed) instead of silently shipping a wrong policy.
  */
 
+import { parseStrictEnvBool } from './env-bool'
+
 const DEFAULT_MAX_AGE_SECONDS = 63072000 // 2 years
-
-// Mirrors src/lib/env-bool.ts truthy tokens, plus explicit falsy tokens so
-// typos fail loudly instead of silently flipping the policy.
-const TRUE_TOKENS = ['true', 'yes', '1', 'on']
-const FALSE_TOKENS = ['false', 'no', '0', 'off']
-
-export interface HstsHeader {
-  key: 'Strict-Transport-Security'
-  value: string
-}
-
-function parseBoolEnv(
-  name: string,
-  raw: string | undefined,
-  defaultValue: boolean,
-): boolean {
-  if (raw === undefined || raw === '') return defaultValue
-  const lowered = raw.toLowerCase()
-  if (TRUE_TOKENS.includes(lowered)) return true
-  if (FALSE_TOKENS.includes(lowered)) return false
-  throw new Error(
-    `${name} must be one of ${[...TRUE_TOKENS, ...FALSE_TOKENS].join('/')}, got: ${JSON.stringify(raw)}`,
-  )
-}
 
 function parseMaxAgeEnv(raw: string | undefined): number {
   if (raw === undefined || raw === '') return DEFAULT_MAX_AGE_SECONDS
@@ -85,28 +72,28 @@ function parseMaxAgeEnv(raw: string | undefined): number {
 }
 
 /**
- * Build the Strict-Transport-Security header entry from the environment.
+ * Build the Strict-Transport-Security header value from the environment.
+ *
+ * All three HSTS_* variables are validated before the enabled check, so an
+ * invalid value throws even when HSTS_ENABLED=false (fail-closed).
  *
  * @param env - environment to read from (defaults to process.env)
- * @returns the header entry, or null when the app must not send the header
- *   (HSTS_ENABLED=false)
+ * @returns the header value (e.g. `max-age=63072000`), or null when the app
+ *   must not send the header (HSTS_ENABLED=false)
  * @throws on invalid environment values (fail-closed)
  */
 export function buildHstsHeader(
   env: Record<string, string | undefined> = process.env,
-): HstsHeader | null {
-  const enabled = parseBoolEnv('HSTS_ENABLED', env.HSTS_ENABLED, true)
-  if (!enabled) return null
-
+): string | null {
+  const enabled = parseStrictEnvBool('HSTS_ENABLED', env.HSTS_ENABLED, true)
   const maxAge = parseMaxAgeEnv(env.HSTS_MAX_AGE)
-  const includeSubDomains = parseBoolEnv(
+  const includeSubDomains = parseStrictEnvBool(
     'HSTS_INCLUDE_SUBDOMAINS',
     env.HSTS_INCLUDE_SUBDOMAINS,
     false,
   )
 
-  return {
-    key: 'Strict-Transport-Security',
-    value: `max-age=${maxAge}${includeSubDomains ? '; includeSubDomains' : ''}`,
-  }
+  if (!enabled) return null
+
+  return `max-age=${maxAge}${includeSubDomains ? '; includeSubDomains' : ''}`
 }

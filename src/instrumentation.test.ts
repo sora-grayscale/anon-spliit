@@ -22,6 +22,14 @@ describe('instrumentation register (startup HSTS validation)', () => {
   })
 
   it('throws at startup for an invalid configuration (fail-closed)', () => {
+    for (const k of keys) delete process.env[k]
+    process.env.HSTS_MAX_AGE = 'oops'
+    expect(() => register()).toThrow(/HSTS_MAX_AGE/)
+  })
+
+  it('validates unconditionally: throws even when HSTS_ENABLED=false', () => {
+    for (const k of keys) delete process.env[k]
+    process.env.HSTS_ENABLED = 'false'
     process.env.HSTS_MAX_AGE = 'oops'
     expect(() => register()).toThrow(/HSTS_MAX_AGE/)
   })

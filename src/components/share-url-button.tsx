@@ -20,7 +20,10 @@ export function ShareUrlButton({ url, text }: Props) {
       type="button"
       onClick={() => {
         if (navigator.share) {
-          navigator.share({ text, url })
+          // Rejection (e.g. the user cancelling the share sheet) is expected;
+          // never log it — the payload contains the share URL whose fragment
+          // carries the encryption key.
+          navigator.share({ text, url }).catch(() => {})
         } else {
           // Do not log `url`/`text`: the share URL contains the encryption key
           // in its fragment, and logging it would expose key material to the
