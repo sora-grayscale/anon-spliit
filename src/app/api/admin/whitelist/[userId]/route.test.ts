@@ -123,13 +123,36 @@ describe('PATCH /api/admin/whitelist/[userId] — password reset', () => {
       '2026-07-14T12:00:00.000Z',
     )
     // Success consumes exactly one slot, keyed by admin id with the reset
-    // prefix.
+    // prefix — CHECK and RECORD use the same key/limit/window.
     expect(mockedRecord).toHaveBeenCalledTimes(1)
     expect(mockedCheck).toHaveBeenCalledWith(
       'admin-whitelist-reset:a1',
       60,
       60 * 60 * 1000,
     )
+    expect(mockedRecord).toHaveBeenCalledWith(
+      'admin-whitelist-reset:a1',
+      60,
+      60 * 60 * 1000,
+    )
+    // The slot is reserved BEFORE any DB await, so a concurrent burst cannot
+    // all pass CHECK at a low count.
+    expect(mockedRecord.mock.invocationCallOrder[0]).toBeLessThan(
+      mockedPrisma.whitelistUser.findUnique.mock.invocationCallOrder[0],
+    )
+  })
+
+  it('consumes exactly one slot when the DB work throws (caught 500)', async () => {
+    mockedAuth.mockResolvedValue(makeSession())
+    mockedPrisma.whitelistUser.findUnique.mockResolvedValue({ id: 'w1' })
+    mockedPrisma.whitelistUser.update.mockRejectedValue(new Error('db down'))
+
+    const res = await PATCH(patchRequest(), params)
+
+    // The reservation already happened before the throwing update, so the
+    // caught 500 has consumed one slot.
+    expect(res.status).toBe(500)
+    expect(mockedRecord).toHaveBeenCalledTimes(1)
   })
 
   it('returns 429 with Retry-After and does not consume when rate limited', async () => {
@@ -204,5 +227,16 @@ describe('DELETE /api/admin/whitelist/[userId]', () => {
     expect(res.headers.get('Retry-After')).toBe('3600')
     expect(mockedRecord).not.toHaveBeenCalled()
     expect(mockedPrisma.whitelistUser.findUnique).not.toHaveBeenCalled()
+  })
+
+  it('consumes a slot on 404 (user not found)', async () => {
+    mockedAuth.mockResolvedValue(makeSession())
+    mockedPrisma.whitelistUser.findUnique.mockResolvedValue(null)
+
+    const res = await DELETE(deleteRequest(), params)
+
+    expect(res.status).toBe(404)
+    expect(mockedRecord).toHaveBeenCalledTimes(1)
+    expect(mockedPrisma.whitelistUser.delete).not.toHaveBeenCalled()
   })
 })

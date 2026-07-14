@@ -45,7 +45,8 @@ afterEach(() => {
 
 describe('ShareUrlButton', () => {
   it('stays usable when `share` exists but `canShare` does not (compat regression)', () => {
-    setNavigatorShare(jest.fn())
+    const shareMock = jest.fn(() => Promise.resolve())
+    setNavigatorShare(shareMock)
     // `canShare` is intentionally left unset, as in WebViews that shipped
     // `share` years before `canShare`.
 
@@ -54,7 +55,14 @@ describe('ShareUrlButton', () => {
       utils = render(<ShareUrlButton url={KEYED_URL} text="t" />)
     }).not.toThrow()
 
-    expect(utils.queryByRole('button')).not.toBeNull()
+    const button = utils.queryByRole('button')
+    expect(button).not.toBeNull()
+
+    // "Usable" means the click actually invokes the Web Share API, not just
+    // that a button renders.
+    fireEvent.click(button as HTMLElement)
+    expect(shareMock).toHaveBeenCalledTimes(1)
+    expect(shareMock).toHaveBeenCalledWith({ url: KEYED_URL, text: 't' })
   })
 
   it('never logs the url/text (key material), even when the share sheet is dismissed', async () => {

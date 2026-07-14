@@ -8,12 +8,13 @@
  * guarantee on multi-instance / Vercel deployments.
  *
  * Rate-limit policy (mirrors POST): the pre-auth gates (private-instance,
- * session/admin+id, 2FA, password-change) and the CHECK itself never touch
- * the limiter, so a third party cannot be locked out by failed requests.
- * Once CHECK passes the slot is reserved synchronously — before any await —
- * so a concurrent burst cannot all observe `count<MAX` and bypass the cap.
- * Every subsequent outcome (404 not-found, success, internal 500) has
- * therefore already consumed one attempt.
+ * session/admin+id, 2FA, password-change) and the CHECK itself do not consume
+ * an attempt (CHECK reads the counter but reserves nothing), so a third party
+ * cannot be locked out by failed requests. Once CHECK passes the slot is
+ * reserved synchronously — before the DB/bcrypt work below — so a concurrent
+ * burst cannot all observe `count<MAX` and bypass the cap. Every outcome after
+ * that reservation (404 not-found, success, internal 500 from the DB/bcrypt
+ * work) has therefore already consumed one attempt.
  */
 
 import { auth, generateInitialPassword, isPrivateInstance } from '@/lib/auth'
@@ -67,8 +68,9 @@ export async function PATCH(
   const pwChangeResp = passwordChangeRequiredResponse(session)
   if (pwChangeResp) return pwChangeResp
 
-  // 5. Rate-limit CHECK keyed by the admin subject. Gates 1-4 do not touch
-  //    the limiter so a third party cannot be locked out via failed requests.
+  // 5. Rate-limit CHECK keyed by the admin subject. Gates 1-4 and this CHECK
+  //    do not consume an attempt, so a third party cannot be locked out via
+  //    failed requests.
   const rateLimitKey = `${RESET_RATE_LIMIT_PREFIX}${session.user.id}`
   const limit = checkOperationRateLimit(
     rateLimitKey,
@@ -111,9 +113,13 @@ export async function PATCH(
 
     // Update user with new password. `passwordChangedAt` is bumped so
     // pre-existing JWTs are rejected by the iat acceptance check (Issue #135).
-    // This is not a race-free revocation guarantee: iat is second-granular
-    // while passwordChangedAt is millisecond, so a same-second concurrent
-    // login can retain a residual valid token.
+    // This is NOT a race-free revocation and it cuts both ways:
+    //  - iat is second-granular while passwordChangedAt is millisecond, so a
+    //    legitimate token minted in the same wall-clock second as the reset
+    //    (iat <= passwordChangedAt) is also rejected — a rare transient logout.
+    //  - a login whose authorize() started before this write (TOCTOU) can
+    //    still mint a token that survives, since its iat may land after
+    //    passwordChangedAt.
     await prisma.whitelistUser.update({
       where: { id: userId },
       data: {
@@ -160,8 +166,9 @@ export async function DELETE(
   const pwChangeResp = passwordChangeRequiredResponse(session)
   if (pwChangeResp) return pwChangeResp
 
-  // 5. Rate-limit CHECK keyed by the admin subject. Gates 1-4 do not touch
-  //    the limiter so a third party cannot be locked out via failed requests.
+  // 5. Rate-limit CHECK keyed by the admin subject. Gates 1-4 and this CHECK
+  //    do not consume an attempt, so a third party cannot be locked out via
+  //    failed requests.
   const rateLimitKey = `${DELETE_RATE_LIMIT_PREFIX}${session.user.id}`
   const limit = checkOperationRateLimit(
     rateLimitKey,
