@@ -5,6 +5,7 @@
  * Redirects users to 2FA verification page if requiresTwoFactor is true
  */
 
+import { setPendingFragment } from '@/lib/pending-fragment'
 import { Loader2 } from 'lucide-react'
 import { useSession } from 'next-auth/react'
 import { usePathname, useRouter } from 'next/navigation'
@@ -59,6 +60,12 @@ function TwoFactorGuardContent({ children }: { children: React.ReactNode }) {
 
     // Redirect to 2FA verification if required
     if (session?.user?.requiresTwoFactor) {
+      // Park the URL fragment (the group's E2EE key) before redirecting: it
+      // must not ride on callbackUrl (query strings reach the server) and
+      // would otherwise be dropped. The store ignores empty writes, so an
+      // effect re-run after router.push has already stripped the hash cannot
+      // clobber the capture.
+      setPendingFragment(pathname, window.location.hash.slice(1))
       const callbackUrl = encodeURIComponent(pathname)
       router.push(`/auth/verify-2fa?callbackUrl=${callbackUrl}`)
       return

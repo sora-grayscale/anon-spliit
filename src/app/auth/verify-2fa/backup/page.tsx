@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { restorePendingFragment } from '@/lib/pending-fragment'
 import { sanitizeCallbackUrl } from '@/lib/safe-callback-url'
 import {
   AlertCircle,
@@ -102,8 +103,9 @@ export default function BackupCodePage() {
       // Update session to mark 2FA as verified
       await update({ twoFactorVerified: true })
 
-      // Redirect to callback URL or home
-      router.replace(callbackUrl)
+      // Redirect to callback URL or home, re-attaching the URL fragment
+      // (E2EE key) that TwoFactorGuard parked before redirecting here.
+      router.replace(restorePendingFragment(callbackUrl))
     } catch {
       setError(t('backup.errors.networkError'))
     } finally {

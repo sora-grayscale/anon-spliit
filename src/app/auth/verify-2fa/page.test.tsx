@@ -38,6 +38,7 @@ jest.mock('next/link', () => ({
 }))
 
 import Verify2FAPage from '@/app/auth/verify-2fa/page'
+import { setPendingFragment } from '@/lib/pending-fragment'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -49,9 +50,12 @@ const mockedUseSearchParams = useSearchParams as jest.MockedFunction<
   typeof useSearchParams
 >
 
-function setup2FASession() {
-  mockedUseRouter.mockReturnValue({ replace: jest.fn() } as never)
-  mockedUseSearchParams.mockReturnValue({ get: () => null } as never)
+function setup2FASession(callbackUrl: string | null = null) {
+  const replace = jest.fn()
+  mockedUseRouter.mockReturnValue({ replace } as never)
+  mockedUseSearchParams.mockReturnValue({
+    get: (key: string) => (key === 'callbackUrl' ? callbackUrl : null),
+  } as never)
   mockedUseSession.mockReturnValue({
     data: {
       user: { email: 'user@example.com', requiresTwoFactor: true },
@@ -59,10 +63,22 @@ function setup2FASession() {
     status: 'authenticated',
     update: jest.fn(() => Promise.resolve()),
   } as never)
+  return replace
 }
 
 function rejectingFetch() {
   const fetchMock = jest.fn(() => Promise.reject(new Error('offline')))
+  global.fetch = fetchMock as unknown as typeof fetch
+  return fetchMock
+}
+
+function succeedingFetch() {
+  const fetchMock = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({}),
+    } as Response),
+  )
   global.fetch = fetchMock as unknown as typeof fetch
   return fetchMock
 }
@@ -129,5 +145,38 @@ describe('Verify2FAPage auto-submit gating', () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+// The pending-fragment store is module-level, so each test uses its own
+// unique callback path (see pending-fragment.test.ts for the convention).
+describe('Verify2FAPage fragment restoration', () => {
+  it('re-attaches the parked fragment (E2EE key) to the callback URL after success', async () => {
+    const replace = setup2FASession('/groups/vf')
+    succeedingFetch()
+    setPendingFragment('/groups/vf', 'KEYvf')
+
+    render(<Verify2FAPage />)
+    fireEvent.change(screen.getByLabelText('verify.codeLabel'), {
+      target: { value: '123456' },
+    })
+
+    await waitFor(() =>
+      expect(replace).toHaveBeenCalledWith('/groups/vf#KEYvf'),
+    )
+  })
+
+  it('navigates to the plain callback URL when no fragment is pending', async () => {
+    const replace = setup2FASession('/groups/vf-plain')
+    succeedingFetch()
+
+    render(<Verify2FAPage />)
+    fireEvent.change(screen.getByLabelText('verify.codeLabel'), {
+      target: { value: '123456' },
+    })
+
+    await waitFor(() =>
+      expect(replace).toHaveBeenCalledWith('/groups/vf-plain'),
+    )
   })
 })
