@@ -36,9 +36,20 @@ jest.mock('bcryptjs', () => ({
   },
 }))
 
+// The PATCH route now applies the per-admin operation rate limit, so mock the
+// limiter (mirrors admin-whitelist-validation.test.ts). This also avoids
+// loading the real module, whose module-level cleanup setInterval would keep
+// the Jest worker's event loop alive.
+jest.mock('@/lib/rate-limit', () => ({
+  __esModule: true,
+  checkOperationRateLimit: jest.fn(() => ({ isLimited: false })),
+  recordOperationAttempt: jest.fn(),
+}))
+
 import { PATCH } from '@/app/api/admin/whitelist/[userId]/route'
 import { auth, generateInitialPassword, isPrivateInstance } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { checkOperationRateLimit } from '@/lib/rate-limit'
 import bcrypt from 'bcryptjs'
 
 // MockedFunction<typeof X> chokes on NextAuth's overloaded `auth` and on
@@ -52,6 +63,7 @@ const mockBcryptHash = bcrypt.hash as unknown as jest.Mock
 const mockWhitelistFindUnique = prisma.whitelistUser
   .findUnique as unknown as jest.Mock
 const mockWhitelistUpdate = prisma.whitelistUser.update as unknown as jest.Mock
+const mockCheckRateLimit = checkOperationRateLimit as unknown as jest.Mock
 
 type SessionUser = {
   id: string
@@ -100,6 +112,8 @@ function setupValidSession(overrides: Partial<SessionUser> = {}) {
   // `jest.resetAllMocks()` in beforeEach wipes the mock's initial impl,
   // so re-establish the fixed return value per test for stability.
   mockGenerateInitialPassword.mockReturnValue('A'.repeat(20))
+  // Not rate-limited by default so the route reaches the DB work.
+  mockCheckRateLimit.mockReturnValue({ isLimited: false })
 }
 
 beforeEach(() => {
@@ -195,11 +209,14 @@ describe('PATCH /api/admin/whitelist/[userId] — success contract', () => {
     // The latter ensures the user is forced through the change-password
     // flow on next login — a regression here would let a reset user log
     // in indefinitely without changing the admin-issued password.
+    // 5. `passwordChangedAt` is stamped so the reset invalidates the
+    // target's pre-existing JWTs via the iat acceptance check (Issue #135).
     expect(mockWhitelistUpdate).toHaveBeenCalledWith({
       where: { id: TARGET_USER_ID },
       data: {
         password: HASHED_PWD,
         mustChangePassword: true,
+        passwordChangedAt: expect.any(Date),
       },
     })
     expect(mockGenerateInitialPassword).toHaveBeenCalledTimes(1)

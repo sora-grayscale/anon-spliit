@@ -15,7 +15,13 @@ interface PasswordChangeGuardProps {
 }
 
 // Routes that don't require password change check
-const excludedRoutes = ['/auth/signin', '/auth/error', '/auth/change-password']
+const excludedRoutes = [
+  '/auth/signin',
+  '/auth/error',
+  '/auth/change-password',
+  '/auth/verify-2fa',
+  '/auth/verify-2fa/backup',
+]
 
 export function PasswordChangeGuard({
   children,
@@ -41,6 +47,9 @@ function PasswordChangeGuardContent({
   useEffect(() => {
     if (status !== 'authenticated') return
     if (excludedRoutes.some((route) => pathname.startsWith(route))) return
+    // 2FA takes precedence; defer to TwoFactorGuard so both guards mounting
+    // together (layout.tsx) do not push simultaneously and race.
+    if (session?.user?.requiresTwoFactor) return
 
     if (session?.user?.mustChangePassword) {
       router.push('/auth/change-password')
