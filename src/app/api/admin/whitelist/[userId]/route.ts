@@ -112,14 +112,17 @@ export async function PATCH(
     const hashedPassword = await bcrypt.hash(initialPassword, 12)
 
     // Update user with new password. `passwordChangedAt` is bumped so
-    // pre-existing JWTs are rejected by the iat acceptance check (Issue #135).
-    // This is NOT a race-free revocation and it cuts both ways:
+    // pre-existing JWTs are rejected by the iat acceptance check (Issue #135):
+    // a token is rejected when `tokenIatSeconds * 1000 < passwordChangedAt`
+    // (strict; an exact match is accepted — see isTokenIatAcceptable). This is
+    // NOT a race-free revocation and it cuts both ways:
     //  - iat is second-granular while passwordChangedAt is millisecond, so a
-    //    legitimate token minted in the same wall-clock second as the reset
-    //    (iat <= passwordChangedAt) is also rejected — a rare transient logout.
+    //    legitimate token minted later in the same wall-clock second as the
+    //    reset (its iat floors below passwordChangedAt's millisecond value) is
+    //    also rejected — a rare transient logout.
     //  - a login whose authorize() started before this write (TOCTOU) can
-    //    still mint a token that survives, since its iat may land after
-    //    passwordChangedAt.
+    //    still mint a token that survives, if its iat floors to a second at or
+    //    after passwordChangedAt.
     await prisma.whitelistUser.update({
       where: { id: userId },
       data: {

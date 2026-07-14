@@ -37,9 +37,8 @@ jest.mock('bcryptjs', () => ({
 }))
 
 // The PATCH route now applies the per-admin operation rate limit, so mock the
-// limiter (mirrors admin-whitelist-validation.test.ts). This also avoids
-// loading the real module, whose module-level cleanup setInterval would keep
-// the Jest worker's event loop alive.
+// limiter (mirrors admin-whitelist-validation.test.ts) to keep these tests
+// isolated from the real limiter's shared in-memory state.
 jest.mock('@/lib/rate-limit', () => ({
   __esModule: true,
   checkOperationRateLimit: jest.fn(() => ({ isLimited: false })),

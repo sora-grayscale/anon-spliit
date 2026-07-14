@@ -101,6 +101,8 @@ describe('PasswordChangeGuard / TwoFactorGuard precedence', () => {
 
     // StrictMode may replay the effect, so the same-target push can repeat,
     // but the 2FA-first invariant must hold: change-password is never pushed.
+    // Assert a push actually happened so the checks below aren't vacuous.
+    expect(push).toHaveBeenCalled()
     expect(push).not.toHaveBeenCalledWith('/auth/change-password')
     for (const call of push.mock.calls) {
       expect(String(call[0])).toContain('/auth/verify-2fa')
