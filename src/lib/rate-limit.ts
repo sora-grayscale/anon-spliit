@@ -63,6 +63,10 @@ class MemoryStorage implements RateLimitStorage {
     this.cleanupInterval = setInterval(() => {
       this.cleanup()
     }, CLEANUP_INTERVAL_MS)
+    // Don't keep the Node event loop alive solely for periodic cleanup: the
+    // running server is held open by its listener, while a short-lived process
+    // (e.g. a Jest worker that imports this module) must still be able to exit.
+    this.cleanupInterval.unref?.()
   }
 
   async get(key: string): Promise<AttemptRecord | null> {
@@ -540,7 +544,7 @@ const operationAttempts = new Map<string, AttemptRecord>()
 
 // Cleanup old operation attempts periodically
 if (typeof window === 'undefined') {
-  setInterval(
+  const operationCleanupInterval = setInterval(
     () => {
       const now = Date.now()
       const keysToDelete: string[] = []
@@ -555,6 +559,9 @@ if (typeof window === 'undefined') {
     },
     5 * 60 * 1000,
   ) // Every 5 minutes
+  // Don't keep the Node event loop alive solely for this timer, so short-lived
+  // processes (e.g. Jest workers importing this module) can exit cleanly.
+  operationCleanupInterval.unref?.()
 }
 
 /**

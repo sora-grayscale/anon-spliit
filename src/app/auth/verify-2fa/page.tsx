@@ -25,7 +25,7 @@ import { useSession } from 'next-auth/react'
 import { useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 export default function Verify2FAPage() {
   const t = useTranslations('TwoFactorAuth')
@@ -38,6 +38,11 @@ export default function Verify2FAPage() {
   const [token, setToken] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Last token handed to a submit attempt. Gates the auto-submit effect so a
+  // fetch rejection (e.g. offline) does not re-fire the same token in a loop
+  // once `isLoading` clears. Cleared on user edit so a re-typed code retries.
+  const lastAttemptedTokenRef = useRef<string | null>(null)
 
   // Redirect if user doesn't require 2FA verification
   useEffect(() => {
@@ -52,6 +57,9 @@ export default function Verify2FAPage() {
   // Handle token input - only allow digits and max 6 characters
   const handleTokenChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.replace(/\D/g, '').slice(0, 6)
+    // User is editing: re-enable auto-submit so re-entering the same 6 digits
+    // retries.
+    lastAttemptedTokenRef.current = null
     setToken(value)
   }
 
@@ -66,6 +74,13 @@ export default function Verify2FAPage() {
         setError(t('verify.errors.invalidLength'))
         return
       }
+
+      // Record the attempted token synchronously before the request. The
+      // auto-submit effect will not re-fire while the ref still equals the
+      // current token, so a fetch rejection cannot loop. Setting it here (in
+      // both auto and manual paths) also makes a StrictMode double-invoke of
+      // the effect a no-op on the second call. Not cleared in catch/finally.
+      lastAttemptedTokenRef.current = token
 
       setIsLoading(true)
       setError(null)
@@ -104,9 +119,16 @@ export default function Verify2FAPage() {
     [token, session?.user?.email, t, update, router, callbackUrl],
   )
 
-  // Auto-submit when 6 digits are entered
+  // Auto-submit when 6 digits are entered. Gated on the ref so it fires only
+  // for a token that has not already been attempted (prevents the offline
+  // re-submit loop and StrictMode double-submit). Manual submit calls
+  // handleSubmit directly and bypasses this gate.
   useEffect(() => {
-    if (token.length === 6 && !isLoading) {
+    if (
+      token.length === 6 &&
+      !isLoading &&
+      lastAttemptedTokenRef.current !== token
+    ) {
       handleSubmit()
     }
   }, [token, isLoading, handleSubmit])

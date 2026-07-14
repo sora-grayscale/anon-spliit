@@ -19,17 +19,11 @@ export function ShareUrlButton({ url, text }: Props) {
       variant="secondary"
       type="button"
       onClick={() => {
-        if (navigator.share) {
-          // Rejection (e.g. the user cancelling the share sheet) is expected;
-          // never log it — the payload contains the share URL whose fragment
-          // carries the encryption key.
-          navigator.share({ text, url }).catch(() => {})
-        } else {
-          // Do not log `url`/`text`: the share URL contains the encryption key
-          // in its fragment, and logging it would expose key material to the
-          // console (DevTools, extensions, screen shares).
-          console.warn('Web Share API is not available')
-        }
+        if (typeof navigator.share !== 'function') return
+        // Rejection (e.g. the user cancelling the share sheet) is expected;
+        // never log it — the payload contains the share URL whose fragment
+        // carries the encryption key.
+        navigator.share({ text, url }).catch(() => {})
       }}
     >
       <Share className="w-4 h-4" />
@@ -41,8 +35,13 @@ function useCanShare(url: string, text: string) {
   const [canShare, setCanShare] = useState<boolean | null>(null)
 
   useEffect(() => {
+    // `navigator.share` shipped years before `navigator.canShare`; keep the
+    // button usable when the runtime has the former but not the latter
+    // instead of calling `canShare` and throwing.
     setCanShare(
-      navigator.share !== undefined && navigator.canShare({ url, text }),
+      typeof navigator.share === 'function' &&
+        (typeof navigator.canShare !== 'function' ||
+          navigator.canShare({ url, text })),
     )
   }, [text, url])
 

@@ -24,6 +24,21 @@ export default async function AdminPage() {
     redirect('/')
   }
 
+  // Enforce the 2FA / password-change gates server-side before any dashboard
+  // data is queried or serialized. (`auth()` above already reads the session's
+  // security fields; this gate runs before the dashboard/stat/identity queries
+  // below.) The client TwoFactorGuard / PasswordChangeGuard only run after
+  // hydration, so without this an admin who has not cleared 2FA (or must change
+  // their password) would receive the serialized admin and whitelist emails in
+  // the initial payload. `redirect()` throws (NEXT_REDIRECT), short-circuiting
+  // before those queries. 2FA is checked first to match the REST/tRPC ordering.
+  if (session.user.requiresTwoFactor) {
+    redirect('/auth/verify-2fa?callbackUrl=/admin')
+  }
+  if (session.user.mustChangePassword) {
+    redirect('/auth/change-password')
+  }
+
   // Get stats
   const [groupCount, adminCount, whitelistCount] = await Promise.all([
     prisma.group.count({ where: { deletedAt: null } }),
