@@ -33,7 +33,7 @@ import { useSession } from 'next-auth/react'
 import { useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 export default function BackupCodePage() {
   const t = useTranslations('TwoFactorAuth')
@@ -47,9 +47,19 @@ export default function BackupCodePage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Set while the success handler owns navigation: once update() reflects
+  // requiresTwoFactor=false, the redirect-away effect below re-fires and its
+  // replace('/') would race the success replace and strand the one-shot
+  // parked fragment (E2EE key). Reset if the session refresh fails.
+  const isNavigatingAfterVerifyRef = useRef(false)
+
   // Redirect if user doesn't require 2FA verification
   useEffect(() => {
     if (status === 'loading') return
+
+    // The success handler is navigating to the callback URL; the session
+    // refresh flipping requiresTwoFactor must not bounce to '/' instead.
+    if (isNavigatingAfterVerifyRef.current) return
 
     // If no session or doesn't require 2FA, redirect to home
     if (!session?.user?.requiresTwoFactor) {
@@ -100,13 +110,27 @@ export default function BackupCodePage() {
         return
       }
 
+      // From here the success handler owns navigation; set before the
+      // await so the redirect-away effect stays quiet while the session
+      // refresh lands (see the effect above).
+      isNavigatingAfterVerifyRef.current = true
+
       // Update session to mark 2FA as verified
-      await update({ twoFactorVerified: true })
+      const updatedSession = await update({ twoFactorVerified: true })
+      if (!updatedSession) {
+        // Session refresh failed: navigating now would bounce back through
+        // the guard and consume the parked fragment for nothing. Keep it
+        // parked and let the user retry.
+        isNavigatingAfterVerifyRef.current = false
+        setError(t('backup.errors.networkError'))
+        return
+      }
 
       // Redirect to callback URL or home, re-attaching the URL fragment
       // (E2EE key) that TwoFactorGuard parked before redirecting here.
       router.replace(restorePendingFragment(callbackUrl))
     } catch {
+      isNavigatingAfterVerifyRef.current = false
       setError(t('backup.errors.networkError'))
     } finally {
       setIsLoading(false)

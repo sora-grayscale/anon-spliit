@@ -33,7 +33,7 @@ jest.mock('next/link', () => ({
 }))
 
 import BackupCodePage from '@/app/auth/verify-2fa/backup/page'
-import { setPendingFragment } from '@/lib/pending-fragment'
+import { setPendingFragment, takePendingFragment } from '@/lib/pending-fragment'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -44,19 +44,34 @@ const mockedUseSearchParams = useSearchParams as jest.MockedFunction<
   typeof useSearchParams
 >
 
-function setup2FASession(callbackUrl: string | null = null) {
+function setup2FASession(
+  callbackUrl: string | null = null,
+  { updateSucceeds = true } = {},
+) {
   const replace = jest.fn()
   mockedUseRouter.mockReturnValue({ replace } as never)
   mockedUseSearchParams.mockReturnValue({
     get: (key: string) => (key === 'callbackUrl' ? callbackUrl : null),
   } as never)
-  mockedUseSession.mockReturnValue({
-    data: {
-      user: { email: 'user@example.com', requiresTwoFactor: true },
-    },
-    status: 'authenticated',
-    update: jest.fn(() => Promise.resolve()),
-  } as never)
+  // Stateful mock mirroring production: update() makes the refreshed session
+  // come back with requiresTwoFactor=false, which re-fires the redirect-away
+  // effect (the race gated by the navigation ref).
+  let requiresTwoFactor = true
+  const update = jest.fn(() => {
+    if (!updateSucceeds) return Promise.resolve(null)
+    requiresTwoFactor = false
+    return Promise.resolve({ user: { email: 'user@example.com' } })
+  })
+  mockedUseSession.mockImplementation(
+    () =>
+      ({
+        data: {
+          user: { email: 'user@example.com', requiresTwoFactor },
+        },
+        status: 'authenticated',
+        update,
+      }) as never,
+  )
   return replace
 }
 
@@ -95,6 +110,14 @@ describe('BackupCodePage fragment restoration', () => {
     await waitFor(() =>
       expect(replace).toHaveBeenCalledWith('/groups/bk#KEYbk'),
     )
+    // Wait for the post-update re-render (requiresTwoFactor=false renders
+    // null) so the redirect-away effect has re-fired before asserting it did
+    // not steal the navigation with replace('/').
+    await waitFor(() =>
+      expect(screen.queryByLabelText('backup.codeLabel')).toBeNull(),
+    )
+    expect(replace).toHaveBeenCalledTimes(1)
+    expect(replace).not.toHaveBeenCalledWith('/')
   })
 
   it('navigates to the plain callback URL when no fragment is pending', async () => {
@@ -107,5 +130,28 @@ describe('BackupCodePage fragment restoration', () => {
     await waitFor(() =>
       expect(replace).toHaveBeenCalledWith('/groups/bk-plain'),
     )
+    await waitFor(() =>
+      expect(screen.queryByLabelText('backup.codeLabel')).toBeNull(),
+    )
+    expect(replace).toHaveBeenCalledTimes(1)
+    expect(replace).not.toHaveBeenCalledWith('/')
+  })
+
+  it('does not navigate or consume the fragment when the session update fails', async () => {
+    const replace = setup2FASession('/groups/bk-upfail', {
+      updateSucceeds: false,
+    })
+    succeedingFetch()
+    setPendingFragment('/groups/bk-upfail', 'KEYbkupfail')
+
+    render(<BackupCodePage />)
+    submitCode('ABCD1234')
+
+    await waitFor(() =>
+      expect(screen.getByText('backup.errors.networkError')).toBeTruthy(),
+    )
+    expect(replace).not.toHaveBeenCalled()
+    // The parked fragment must survive for the retry.
+    expect(takePendingFragment('/groups/bk-upfail')).toBe('KEYbkupfail')
   })
 })
