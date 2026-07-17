@@ -5,10 +5,15 @@
  * Redirects users to 2FA verification page if requiresTwoFactor is true
  */
 
+import { setPendingFragment } from '@/lib/pending-fragment'
+import {
+  invalidateTwoFactorFlow,
+  isVerifyFlowPath,
+} from '@/lib/two-factor-verify-flow'
 import { Loader2 } from 'lucide-react'
 import { useSession } from 'next-auth/react'
 import { usePathname, useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useState } from 'react'
 
 interface TwoFactorGuardProps {
   children: React.ReactNode
@@ -41,6 +46,16 @@ function TwoFactorGuardContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [isChecking, setIsChecking] = useState(true)
 
+  // Leaving the verify flow ends any in-flight verification transaction.
+  // Layout effect: it must run synchronously with the commit, before pending
+  // promise continuations (microtasks) can resume a surviving closure that
+  // would otherwise still own the lease and consume the parked fragment.
+  useLayoutEffect(() => {
+    if (!isVerifyFlowPath(pathname)) {
+      invalidateTwoFactorFlow()
+    }
+  }, [pathname])
+
   useEffect(() => {
     // Wait for session to load
     if (status === 'loading') return
@@ -59,6 +74,15 @@ function TwoFactorGuardContent({ children }: { children: React.ReactNode }) {
 
     // Redirect to 2FA verification if required
     if (session?.user?.requiresTwoFactor) {
+      // Park the URL fragment (the group's E2EE key) before redirecting: it
+      // must not ride on callbackUrl (query strings reach the server) and
+      // would otherwise be dropped. The store ignores empty writes, so an
+      // effect re-run after router.push has already stripped the hash cannot
+      // clobber the capture.
+      setPendingFragment(pathname, window.location.hash.slice(1), {
+        id: session.user.id,
+        isAdmin: session.user.isAdmin,
+      })
       const callbackUrl = encodeURIComponent(pathname)
       router.push(`/auth/verify-2fa?callbackUrl=${callbackUrl}`)
       return

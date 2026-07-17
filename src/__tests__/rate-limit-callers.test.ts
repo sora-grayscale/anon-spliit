@@ -135,7 +135,12 @@ describe('rate-limit async callers (Issue #167)', () => {
     const { POST } = await import('@/app/api/2fa/verify/route')
     const request = new Request('http://localhost/api/2fa/verify', {
       method: 'POST',
-      body: JSON.stringify({ email: 'user@example.com', token: '123456' }),
+      body: JSON.stringify({
+        email: 'user@example.com',
+        token: '123456',
+        subjectId: 'u1',
+        subjectIsAdmin: false,
+      }),
     })
     const res = await POST(request)
 
