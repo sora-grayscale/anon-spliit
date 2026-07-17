@@ -14,12 +14,10 @@ import {
   getTwoFactorFlowVersion,
   getVerifyOutcome,
   invalidateTwoFactorFlow,
-  isBackupDispatchUnsettled,
   isTwoFactorLeaseOwner,
   isVerifyFlowPath,
   markVerifyDispatched,
   markVerifyIdle,
-  markVerifyResponded,
   markVerifyServerVerified,
   releaseTwoFactorLease,
   subscribeTwoFactorFlow,
@@ -118,7 +116,7 @@ describe('verify outcome (subject-bound recovery state)', () => {
   it('tracks dispatched -> serverVerified -> idle for the owner', () => {
     const lease = tryAcquireTwoFactorLease(USER)
 
-    markVerifyDispatched(lease, USER, 'ABCD1234', 'backup')
+    markVerifyDispatched(lease, USER, 'ABCD1234')
     expect(getVerifyOutcome(USER)).toBe('outcomeUnknown')
     expect(wasVerifyTokenDispatched(USER, 'ABCD1234')).toBe(true)
     expect(wasVerifyTokenDispatched(USER, 'WXYZ9876')).toBe(false)
@@ -131,34 +129,13 @@ describe('verify outcome (subject-bound recovery state)', () => {
     expect(wasVerifyTokenDispatched(USER, 'ABCD1234')).toBe(false)
   })
 
-  it('flags an unresponded backup dispatch and clears it once a response arrives', () => {
-    const lease = tryAcquireTwoFactorLease(USER)
-
-    markVerifyDispatched(lease, USER, 'ABCD1234', 'backup')
-    // No response yet (e.g. the fetch rejected): the request may still be
-    // running server-side.
-    expect(isBackupDispatchUnsettled(USER)).toBe(true)
-    expect(isBackupDispatchUnsettled(OTHER_USER)).toBe(false)
-
-    markVerifyResponded(lease)
-    expect(isBackupDispatchUnsettled(USER)).toBe(false)
-    expect(getVerifyOutcome(USER)).toBe('outcomeUnknown')
-  })
-
-  it('does not flag a TOTP dispatch as an unsettled backup dispatch', () => {
-    const lease = tryAcquireTwoFactorLease(USER)
-    markVerifyDispatched(lease, USER, '123456', 'totp')
-    expect(isBackupDispatchUnsettled(USER)).toBe(false)
-  })
-
   it('ignores writes from a non-owner lease', () => {
     const owner = tryAcquireTwoFactorLease(USER)
-    markVerifyDispatched(owner, USER, '123456', 'totp')
+    markVerifyDispatched(owner, USER, '123456')
     invalidateTwoFactorFlow()
 
     // The orphaned closure keeps its old id; its writes must be no-ops.
     markVerifyServerVerified(owner, USER)
-    markVerifyResponded(owner)
     markVerifyIdle(owner)
     expect(getVerifyOutcome(USER)).toBe('outcomeUnknown')
   })

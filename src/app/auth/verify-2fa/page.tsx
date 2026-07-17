@@ -32,7 +32,6 @@ import {
   isVerifyFlowPath,
   markVerifyDispatched,
   markVerifyIdle,
-  markVerifyResponded,
   markVerifyServerVerified,
   releaseTwoFactorLease,
   subscribeTwoFactorFlow,
@@ -200,7 +199,7 @@ export default function Verify2FAPage() {
           return
         }
 
-        markVerifyDispatched(lease, subject, token, 'totp')
+        markVerifyDispatched(lease, subject, token)
 
         const response = await fetch('/api/2fa/verify', {
           method: 'POST',
@@ -218,14 +217,12 @@ export default function Verify2FAPage() {
           }),
         })
         if (!isTwoFactorLeaseOwner(lease)) return
-        // The dispatch got an answer — the request is no longer running
-        // server-side.
-        markVerifyResponded(lease)
 
         // The server committed the verification for this subject: sync the
-        // session and finish the navigation. Reached on a 2xx and on the
+        // session and finish the navigation. Reached on a 2xx, on the
         // ALREADY_VERIFIED rejection (a success in disguise: e.g. another
-        // tab completed first).
+        // tab completed first) and on RETRY_SYNC (the server has a fresh
+        // verification on record — a lost response from an earlier attempt).
         const finishServerVerified = async (): Promise<void> => {
           markVerifyServerVerified(lease, subject)
           const updated = await update({ twoFactorVerified: true })
@@ -266,7 +263,10 @@ export default function Verify2FAPage() {
               // The error body is best-effort.
             }
             if (!isTwoFactorLeaseOwner(lease)) return
-            if (errorBody?.code === 'ALREADY_VERIFIED') {
+            if (
+              errorBody?.code === 'ALREADY_VERIFIED' ||
+              errorBody?.code === 'RETRY_SYNC'
+            ) {
               await finishServerVerified()
               return
             }

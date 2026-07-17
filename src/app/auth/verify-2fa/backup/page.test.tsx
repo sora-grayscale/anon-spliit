@@ -355,8 +355,12 @@ describe('BackupCodePage recovery gating', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
-  it('never sends another backup code while a rejected dispatch may still be running', async () => {
-    const { update } = setup2FASession('/groups/bk-uns', {
+  it('allows manually re-sending the SAME code once update() confirms the session still pending', async () => {
+    // With server-side CAS serializing concurrent consumption and RETRY_SYNC
+    // answering for a committed-but-lost response, a manual resend of the
+    // only remaining code must be possible — otherwise a user whose last
+    // code got an ambiguous response would be stuck.
+    const { update } = setup2FASession('/groups/bk-same', {
       updateBehavior: 'staleTrue',
     })
     const fetchMock = rejectingFetch()
@@ -371,9 +375,30 @@ describe('BackupCodePage recovery gating', () => {
       ).toBe(false),
     )
 
-    // The rejected request may STILL be rewriting the codes array
-    // server-side: even a DIFFERENT backup code must not be sent while the
-    // dispatch is unsettled (recover via update() or the TOTP page).
+    // Same code again: update-first runs (still pending), then the resend.
+    fireEvent.click(screen.getByRole('button', { name: 'backup.submit' }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    expect(update).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not burn another code while the session sync channel is broken', async () => {
+    const { update } = setup2FASession('/groups/bk-broken', {
+      updateBehavior: 'null',
+    })
+    const fetchMock = rejectingFetch()
+
+    render(<BackupCodePage />)
+    submitCode('ABCD1234')
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    await waitFor(() =>
+      expect(
+        (screen.getByLabelText('backup.codeLabel') as HTMLInputElement)
+          .disabled,
+      ).toBe(false),
+    )
+
+    // update() returned null — no explicit same-subject confirmation, so
+    // no resend (same or different code).
     submitCode('WXYZ9876')
     await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
     await waitFor(() =>
@@ -383,6 +408,25 @@ describe('BackupCodePage recovery gating', () => {
       ).toBe(false),
     )
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('treats a RETRY_SYNC conflict as a committed verification and completes with the fragment', async () => {
+    // The server answers RETRY_SYNC when the code is gone but a fresh
+    // verification is on record (this user's own lost response).
+    const { replace, update } = setup2FASession('/groups/bk-rs')
+    statusFetch(409, {
+      error: 'Verification already recorded',
+      code: 'RETRY_SYNC',
+    })
+    setPendingFragment('/groups/bk-rs', 'KEYbkrs', SUBJECT)
+
+    render(<BackupCodePage />)
+    submitCode('ABCD1234')
+
+    await waitFor(() =>
+      expect(replace).toHaveBeenCalledWith('/groups/bk-rs#KEYbkrs'),
+    )
+    expect(update).toHaveBeenCalledTimes(1)
   })
 
   it('allows a different code after a 5xx: the request got an answer', async () => {

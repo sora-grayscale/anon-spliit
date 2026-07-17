@@ -24,15 +24,13 @@
  *   emails are not unique across the Admin and WhitelistUser tables):
  *   'outcomeUnknown' from the moment a code is dispatched until the
  *   server's answer is known, 'serverVerified' once a 2xx (or an
- *   ALREADY_VERIFIED rejection, which is a success in disguise) was
- *   observed. Either state makes the next submit retry the session sync
- *   FIRST instead of re-sending a code. The dispatched token and its kind
- *   are remembered so the same code is never auto-resent, and — because a
- *   rejected fetch means the request may STILL be running server-side —
- *   whether the dispatch ever got a response: while a backup-code dispatch
- *   is transport-unsettled, sending a different backup code could race the
- *   server's non-CAS read-modify-write of the codes array (lost update /
- *   code resurrection), so it is blocked. The outcome survives
+ *   ALREADY_VERIFIED / RETRY_SYNC rejection, which is a success in
+ *   disguise) was observed. Either state makes the next submit retry the
+ *   session sync FIRST instead of re-sending a code. The dispatched token
+ *   is remembered so the TOTP page never auto-resends the same code.
+ *   Concurrent backup-code consumption is serialized SERVER-side (CAS on
+ *   the encrypted codes blob in the verify route), so no client-side
+ *   transport tracking is needed. The outcome survives
  *   `invalidateTwoFactorFlow` so a user bounced back into the flow can
  *   still recover; it holds a short-lived one-time code (never E2EE key
  *   material) and is cleared when the flow completes or definitively fails.
@@ -51,8 +49,6 @@ export interface VerifySubject {
 
 export type VerifyOutcome = 'idle' | 'outcomeUnknown' | 'serverVerified'
 
-export type VerifyTokenKind = 'totp' | 'backup'
-
 let leaseSeq = 0
 let activeLease: number | null = null
 let leaseSubjectKey: string | null = null
@@ -60,8 +56,6 @@ let leaseSubjectKey: string | null = null
 let outcome: VerifyOutcome = 'idle'
 let outcomeSubjectKey: string | null = null
 let dispatchedToken: string | null = null
-let dispatchedKind: VerifyTokenKind | null = null
-let transportUnsettled = false
 
 let version = 0
 const listeners = new Set<() => void>()
@@ -158,23 +152,11 @@ export function markVerifyDispatched(
   lease: number | null,
   subject: VerifySubject,
   token: string,
-  kind: VerifyTokenKind,
 ): void {
   if (!isTwoFactorLeaseOwner(lease)) return
   outcome = 'outcomeUnknown'
   outcomeSubjectKey = verifySubjectKey(subject)
   dispatchedToken = token
-  dispatchedKind = kind
-  transportUnsettled = true
-}
-
-/**
- * Owner-only: the dispatch got an HTTP response (any status) — the request
- * is no longer running server-side.
- */
-export function markVerifyResponded(lease: number | null): void {
-  if (!isTwoFactorLeaseOwner(lease)) return
-  transportUnsettled = false
 }
 
 /** Owner-only: the server committed the verification for this subject. */
@@ -185,7 +167,6 @@ export function markVerifyServerVerified(
   if (!isTwoFactorLeaseOwner(lease)) return
   outcome = 'serverVerified'
   outcomeSubjectKey = verifySubjectKey(subject)
-  transportUnsettled = false
 }
 
 /** Owner-only: the flow completed or the server definitively rejected. */
@@ -194,8 +175,6 @@ export function markVerifyIdle(lease: number | null): void {
   outcome = 'idle'
   outcomeSubjectKey = null
   dispatchedToken = null
-  dispatchedKind = null
-  transportUnsettled = false
 }
 
 export function getVerifyOutcome(subject: VerifySubject): VerifyOutcome {
@@ -214,19 +193,5 @@ export function wasVerifyTokenDispatched(
     outcome !== 'idle' &&
     outcomeSubjectKey === verifySubjectKey(subject) &&
     dispatchedToken === token
-  )
-}
-
-/**
- * True while a backup-code dispatch for this subject never got a response:
- * the request may still be running server-side, so sending another backup
- * code could race the non-CAS rewrite of the codes array.
- */
-export function isBackupDispatchUnsettled(subject: VerifySubject): boolean {
-  return (
-    outcome === 'outcomeUnknown' &&
-    outcomeSubjectKey === verifySubjectKey(subject) &&
-    transportUnsettled &&
-    dispatchedKind === 'backup'
   )
 }

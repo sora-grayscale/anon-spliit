@@ -29,17 +29,14 @@ import {
   getTwoFactorFlowServerVersion,
   getTwoFactorFlowVersion,
   getVerifyOutcome,
-  isBackupDispatchUnsettled,
   isTwoFactorLeaseOwner,
   isVerifyFlowPath,
   markVerifyDispatched,
   markVerifyIdle,
-  markVerifyResponded,
   markVerifyServerVerified,
   releaseTwoFactorLease,
   subscribeTwoFactorFlow,
   tryAcquireTwoFactorLease,
-  wasVerifyTokenDispatched,
 } from '@/lib/two-factor-verify-flow'
 import {
   AlertCircle,
@@ -165,34 +162,29 @@ export default function BackupCodePage() {
         // healthy: update() explicitly returned the SAME subject still
         // requiring 2FA. On null / foreign / malformed sessions, burning
         // another code cannot help — keep the outcome and let the user
-        // retry the sync. The same dispatched code is never re-sent, and
-        // while a backup-code dispatch never got a response (the request
-        // may STILL be running server-side), sending a different backup
-        // code could race the server's non-CAS rewrite of the codes array
-        // (lost update / code resurrection) — recover via the session sync
-        // or the TOTP page instead.
+        // retry the sync. With that explicit confirmation, even the SAME
+        // code may be re-sent manually: concurrent consumption is
+        // serialized server-side (CAS on the codes blob), and a code whose
+        // earlier dispatch actually committed answers RETRY_SYNC instead of
+        // burning an attempt — without this, a user whose only remaining
+        // code got an ambiguous response would be stuck.
         const sessionConfirmsPending =
           updated?.user?.id === subject.id &&
           updated?.user?.isAdmin === subject.isAdmin &&
           updated?.user?.requiresTwoFactor === true
-        if (
-          !sessionConfirmsPending ||
-          wasVerifyTokenDispatched(subject, code) ||
-          isBackupDispatchUnsettled(subject) ||
-          code.length !== 8
-        ) {
+        if (!sessionConfirmsPending || code.length !== 8) {
           releaseTwoFactorLease(lease)
           setError(t('backup.errors.networkError'))
           return
         }
-        // Fall through: fresh attempt with a different code.
+        // Fall through: fresh (or re-sent) attempt.
       } else if (code.length !== 8) {
         releaseTwoFactorLease(lease)
         setError(t('backup.errors.invalidLength'))
         return
       }
 
-      markVerifyDispatched(lease, subject, code, 'backup')
+      markVerifyDispatched(lease, subject, code)
 
       const response = await fetch('/api/2fa/verify', {
         method: 'POST',
@@ -210,14 +202,12 @@ export default function BackupCodePage() {
         }),
       })
       if (!isTwoFactorLeaseOwner(lease)) return
-      // The dispatch got an answer — the request is no longer running
-      // server-side.
-      markVerifyResponded(lease)
 
       // The server committed the verification for this subject: sync the
-      // session and finish the navigation. Reached on a 2xx and on the
+      // session and finish the navigation. Reached on a 2xx, on the
       // ALREADY_VERIFIED rejection (a success in disguise: e.g. another tab
-      // completed first).
+      // completed first) and on RETRY_SYNC (the server has a fresh
+      // verification on record — a lost response from an earlier attempt).
       const finishServerVerified = async (): Promise<void> => {
         markVerifyServerVerified(lease, subject)
         const updated = await update({ twoFactorVerified: true })
@@ -258,7 +248,10 @@ export default function BackupCodePage() {
             // The error body is best-effort.
           }
           if (!isTwoFactorLeaseOwner(lease)) return
-          if (errorBody?.code === 'ALREADY_VERIFIED') {
+          if (
+            errorBody?.code === 'ALREADY_VERIFIED' ||
+            errorBody?.code === 'RETRY_SYNC'
+          ) {
             await finishServerVerified()
             return
           }

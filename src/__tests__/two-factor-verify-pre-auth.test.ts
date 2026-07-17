@@ -22,10 +22,12 @@ jest.mock('@/lib/prisma', () => ({
     admin: {
       findUnique: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
     },
     whitelistUser: {
       findUnique: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
     },
   },
 }))
@@ -75,8 +77,12 @@ const mockedTimingSafeCompare = timingSafeCompare as jest.MockedFunction<
   typeof timingSafeCompare
 >
 const mockedPrisma = prisma as unknown as {
-  admin: { findUnique: jest.Mock; update: jest.Mock }
-  whitelistUser: { findUnique: jest.Mock; update: jest.Mock }
+  admin: { findUnique: jest.Mock; update: jest.Mock; updateMany: jest.Mock }
+  whitelistUser: {
+    findUnique: jest.Mock
+    update: jest.Mock
+    updateMany: jest.Mock
+  }
 }
 
 function makeSession({
@@ -125,8 +131,10 @@ function makeRequest(body: unknown): Request {
 function expectZeroSideEffects() {
   expect(mockedPrisma.admin.findUnique).not.toHaveBeenCalled()
   expect(mockedPrisma.admin.update).not.toHaveBeenCalled()
+  expect(mockedPrisma.admin.updateMany).not.toHaveBeenCalled()
   expect(mockedPrisma.whitelistUser.findUnique).not.toHaveBeenCalled()
   expect(mockedPrisma.whitelistUser.update).not.toHaveBeenCalled()
+  expect(mockedPrisma.whitelistUser.updateMany).not.toHaveBeenCalled()
   expect(mockedRecordFailedAttemptAsync).not.toHaveBeenCalled()
   expect(mockedClearAttemptsAsync).not.toHaveBeenCalled()
 }
@@ -347,6 +355,7 @@ describe('POST /api/2fa/verify — subject binding (Issue #174)', () => {
         twoFactorEnabled: true,
         twoFactorSecret: true,
         twoFactorBackupCodes: true,
+        lastTwoFactorVerifiedAt: true,
       },
     })
     // TOTP path: exactly one write, timestamp only (no backup-code field).
@@ -370,9 +379,11 @@ describe('POST /api/2fa/verify — subject binding (Issue #174)', () => {
       twoFactorEnabled: true,
       twoFactorSecret: 'enc-secret',
       twoFactorBackupCodes: 'enc-codes',
+      lastTwoFactorVerifiedAt: null,
     })
     // First timingSafeCompare returns true → codeIndex=0 → consume.
     mockedTimingSafeCompare.mockImplementationOnce(() => true)
+    mockedPrisma.whitelistUser.updateMany.mockResolvedValue({ count: 1 })
     const { POST } = await import('@/app/api/2fa/verify/route')
     const res = await POST(
       makeRequest({ email: 'user@example.com', token: 'ABCD1234' }),
@@ -390,22 +401,24 @@ describe('POST /api/2fa/verify — subject binding (Issue #174)', () => {
         twoFactorEnabled: true,
         twoFactorSecret: true,
         twoFactorBackupCodes: true,
+        lastTwoFactorVerifiedAt: true,
       },
     })
-    // Single write: backup-code consumption and the verification timestamp
-    // must commit together — a partial commit would burn the code without
-    // granting the 5-minute session-refresh window the client needs to
-    // complete the sign-in.
-    expect(mockedPrisma.whitelistUser.update).toHaveBeenCalledTimes(1)
-    expect(mockedPrisma.whitelistUser.update).toHaveBeenCalledWith({
-      where: { id: 'u1' },
+    // Single CAS write: the WHERE pins the exact blob this attempt decoded,
+    // and code consumption + verification timestamp commit together — a
+    // partial commit would burn the code without granting the 5-minute
+    // session-refresh window the client needs to complete the sign-in.
+    expect(mockedPrisma.whitelistUser.updateMany).toHaveBeenCalledTimes(1)
+    expect(mockedPrisma.whitelistUser.updateMany).toHaveBeenCalledWith({
+      where: { id: 'u1', twoFactorBackupCodes: 'enc-codes' },
       data: {
         twoFactorBackupCodes: 'enc-codes',
         lastTwoFactorVerifiedAt: expect.any(Date),
       },
     })
+    expect(mockedPrisma.whitelistUser.update).not.toHaveBeenCalled()
     expect(mockedPrisma.admin.findUnique).not.toHaveBeenCalled()
-    expect(mockedPrisma.admin.update).not.toHaveBeenCalled()
+    expect(mockedPrisma.admin.updateMany).not.toHaveBeenCalled()
     expect(mockedClearAttemptsAsync).toHaveBeenCalledWith('2fa-verify:u1')
     expect(mockedRecordFailedAttemptAsync).not.toHaveBeenCalled()
   })
@@ -431,5 +444,213 @@ describe('POST /api/2fa/verify — subject binding (Issue #174)', () => {
     expect(mockedPrisma.whitelistUser.update).not.toHaveBeenCalled()
     expect(mockedPrisma.admin.update).not.toHaveBeenCalled()
     expect(mockedClearAttemptsAsync).not.toHaveBeenCalled()
+  })
+})
+
+describe('POST /api/2fa/verify — backup-code CAS (concurrent consumption)', () => {
+  const FRESH = () => new Date()
+  const STALE = () => new Date(Date.now() - 10 * 60 * 1000)
+
+  function setupWhitelistUser(overrides: Record<string, unknown> = {}) {
+    mockedAuth.mockResolvedValue(makeSession())
+    mockedPrisma.whitelistUser.findUnique.mockResolvedValueOnce({
+      id: 'u1',
+      twoFactorEnabled: true,
+      twoFactorSecret: 'enc-secret',
+      twoFactorBackupCodes: 'enc-codes',
+      lastTwoFactorVerifiedAt: null,
+      ...overrides,
+    })
+    mockedTimingSafeCompare.mockImplementation(
+      (a: string, b: string) => a === b,
+    )
+  }
+
+  async function callVerify(token = 'ABCD1234') {
+    const { POST } = await import('@/app/api/2fa/verify/route')
+    return POST(makeRequest({ email: 'user@example.com', token }))
+  }
+
+  it('retries once on a CAS conflict and the final blob drops BOTH concurrently consumed codes', async () => {
+    setupWhitelistUser()
+    const { decryptBackupCodes, encryptBackupCodes } = jest.requireMock(
+      '@/lib/two-factor',
+    ) as { decryptBackupCodes: jest.Mock; encryptBackupCodes: jest.Mock }
+    // First read: our code + one other; a concurrent request consumes the
+    // other and rewrites the blob to 'enc-codes-2' between our read and our
+    // update.
+    decryptBackupCodes.mockImplementation((blob: string) =>
+      blob === 'enc-codes' ? ['ABCD1234', 'OTHR9999'] : ['ABCD1234'],
+    )
+    encryptBackupCodes.mockImplementation(
+      (codes: string[]) => `enc(${codes.join('|')})`,
+    )
+    mockedPrisma.whitelistUser.updateMany
+      .mockResolvedValueOnce({ count: 0 })
+      .mockResolvedValueOnce({ count: 1 })
+    mockedPrisma.whitelistUser.findUnique.mockResolvedValueOnce({
+      twoFactorBackupCodes: 'enc-codes-2',
+      lastTwoFactorVerifiedAt: null,
+    })
+
+    const res = await callVerify()
+
+    expect(res.status).toBe(200)
+    expect(mockedPrisma.whitelistUser.updateMany).toHaveBeenCalledTimes(2)
+    // Each attempt's WHERE pins the exact blob that attempt decoded.
+    expect(mockedPrisma.whitelistUser.updateMany).toHaveBeenNthCalledWith(1, {
+      where: { id: 'u1', twoFactorBackupCodes: 'enc-codes' },
+      data: {
+        twoFactorBackupCodes: 'enc(OTHR9999)',
+        lastTwoFactorVerifiedAt: expect.any(Date),
+      },
+    })
+    // The retry re-decoded the FRESH blob, so the final array is missing
+    // both the concurrently consumed code and ours.
+    expect(mockedPrisma.whitelistUser.updateMany).toHaveBeenNthCalledWith(2, {
+      where: { id: 'u1', twoFactorBackupCodes: 'enc-codes-2' },
+      data: {
+        twoFactorBackupCodes: 'enc()',
+        lastTwoFactorVerifiedAt: expect.any(Date),
+      },
+    })
+    expect(mockedClearAttemptsAsync).toHaveBeenCalledWith('2fa-verify:u1')
+    expect(mockedRecordFailedAttemptAsync).not.toHaveBeenCalled()
+    decryptBackupCodes.mockImplementation(() => ['CODE1', 'CODE2'])
+    encryptBackupCodes.mockImplementation(() => 'enc-codes')
+  })
+
+  it('stops after exactly two CAS attempts and returns 503 with no rate-limit side effects', async () => {
+    setupWhitelistUser()
+    const { decryptBackupCodes } = jest.requireMock('@/lib/two-factor') as {
+      decryptBackupCodes: jest.Mock
+    }
+    decryptBackupCodes.mockImplementation((blob: string) =>
+      blob === 'enc-codes' ? ['ABCD1234', 'X1'] : ['ABCD1234', 'X2'],
+    )
+    mockedPrisma.whitelistUser.updateMany.mockResolvedValue({ count: 0 })
+    mockedPrisma.whitelistUser.findUnique.mockResolvedValueOnce({
+      twoFactorBackupCodes: 'enc-codes-2',
+      lastTwoFactorVerifiedAt: null,
+    })
+
+    const res = await callVerify()
+
+    expect(res.status).toBe(503)
+    expect(mockedPrisma.whitelistUser.updateMany).toHaveBeenCalledTimes(2)
+    // Nothing was proven invalid and nothing succeeded: neither record nor
+    // clear may touch the rate limit.
+    expect(mockedRecordFailedAttemptAsync).not.toHaveBeenCalled()
+    expect(mockedClearAttemptsAsync).not.toHaveBeenCalled()
+    decryptBackupCodes.mockImplementation(() => ['CODE1', 'CODE2'])
+  })
+
+  it('answers RETRY_SYNC when the code vanished after a conflict and the verification is fresh', async () => {
+    setupWhitelistUser()
+    const { decryptBackupCodes } = jest.requireMock('@/lib/two-factor') as {
+      decryptBackupCodes: jest.Mock
+    }
+    // Present on our first read, gone from the fresh row: a concurrent
+    // request (ours, response lost) consumed it and stamped the timestamp.
+    decryptBackupCodes.mockImplementation((blob: string) =>
+      blob === 'enc-codes' ? ['ABCD1234'] : [],
+    )
+    mockedPrisma.whitelistUser.updateMany.mockResolvedValueOnce({ count: 0 })
+    mockedPrisma.whitelistUser.findUnique.mockResolvedValueOnce({
+      twoFactorBackupCodes: 'enc-codes-2',
+      lastTwoFactorVerifiedAt: FRESH(),
+    })
+
+    const res = await callVerify()
+
+    expect(res.status).toBe(409)
+    expect(await res.json()).toEqual({
+      error: 'Verification already recorded',
+      code: 'RETRY_SYNC',
+    })
+    expect(mockedPrisma.whitelistUser.updateMany).toHaveBeenCalledTimes(1)
+    expect(mockedRecordFailedAttemptAsync).not.toHaveBeenCalled()
+    expect(mockedClearAttemptsAsync).not.toHaveBeenCalled()
+    decryptBackupCodes.mockImplementation(() => ['CODE1', 'CODE2'])
+  })
+
+  it('answers RETRY_SYNC when the code is absent from the first read but the verification is fresh', async () => {
+    // e.g. a reload dropped the client's recovery state and the user
+    // re-submits the code their earlier (lost-response) attempt consumed.
+    setupWhitelistUser({ lastTwoFactorVerifiedAt: FRESH() })
+
+    const res = await callVerify('WXYZ9876')
+
+    expect(res.status).toBe(409)
+    expect(await res.json()).toEqual({
+      error: 'Verification already recorded',
+      code: 'RETRY_SYNC',
+    })
+    expect(mockedPrisma.whitelistUser.updateMany).not.toHaveBeenCalled()
+    expect(mockedRecordFailedAttemptAsync).not.toHaveBeenCalled()
+    expect(mockedClearAttemptsAsync).not.toHaveBeenCalled()
+  })
+
+  it('returns a plain 401 (+ failed attempt) only when the code is absent AND no recent verification exists', async () => {
+    setupWhitelistUser({ lastTwoFactorVerifiedAt: STALE() })
+
+    const res = await callVerify('WXYZ9876')
+
+    expect(res.status).toBe(401)
+    expect(await res.json()).toEqual({ error: 'Invalid token' })
+    expect(mockedPrisma.whitelistUser.updateMany).not.toHaveBeenCalled()
+    expect(mockedRecordFailedAttemptAsync).toHaveBeenCalledWith('2fa-verify:u1')
+    expect(mockedClearAttemptsAsync).not.toHaveBeenCalled()
+  })
+
+  it('runs the same CAS retry for Admin (both tables verified)', async () => {
+    mockedAuth.mockResolvedValue(
+      makeSession({ id: 'a1', email: 'admin@example.com', isAdmin: true }),
+    )
+    mockedPrisma.admin.findUnique.mockResolvedValueOnce({
+      id: 'a1',
+      twoFactorEnabled: true,
+      twoFactorSecret: 'enc-secret',
+      twoFactorBackupCodes: 'enc-codes',
+      lastTwoFactorVerifiedAt: null,
+    })
+    mockedTimingSafeCompare.mockImplementation(
+      (a: string, b: string) => a === b,
+    )
+    const { decryptBackupCodes } = jest.requireMock('@/lib/two-factor') as {
+      decryptBackupCodes: jest.Mock
+    }
+    decryptBackupCodes.mockImplementation((blob: string) =>
+      blob === 'enc-codes' ? ['ABCD1234', 'Y1'] : ['ABCD1234'],
+    )
+    mockedPrisma.admin.updateMany
+      .mockResolvedValueOnce({ count: 0 })
+      .mockResolvedValueOnce({ count: 1 })
+    mockedPrisma.admin.findUnique.mockResolvedValueOnce({
+      twoFactorBackupCodes: 'enc-codes-2',
+      lastTwoFactorVerifiedAt: null,
+    })
+
+    const { POST } = await import('@/app/api/2fa/verify/route')
+    const res = await POST(
+      makeRequest({
+        email: 'admin@example.com',
+        token: 'ABCD1234',
+        subjectId: 'a1',
+        subjectIsAdmin: true,
+      }),
+    )
+
+    expect(res.status).toBe(200)
+    expect(mockedPrisma.admin.updateMany).toHaveBeenCalledTimes(2)
+    expect(mockedPrisma.admin.updateMany).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: { id: 'a1', twoFactorBackupCodes: 'enc-codes-2' },
+      }),
+    )
+    expect(mockedPrisma.whitelistUser.updateMany).not.toHaveBeenCalled()
+    expect(mockedClearAttemptsAsync).toHaveBeenCalledWith('2fa-verify:a1')
+    decryptBackupCodes.mockImplementation(() => ['CODE1', 'CODE2'])
   })
 })

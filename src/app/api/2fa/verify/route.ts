@@ -38,6 +38,12 @@ import { NextResponse } from 'next/server'
 // Backup code format: 8 alphanumeric characters (uppercase)
 const BACKUP_CODE_REGEX = /^[A-Z0-9]{8}$/
 
+// Matches the jwt callback's freshness window (src/lib/auth-jwt.ts): a
+// server-recorded verification within this window lets the client clear
+// `requiresTwoFactor` via a session update, so a lost/ambiguous response can
+// be recovered with RETRY_SYNC instead of burning another code.
+const TWO_FACTOR_FRESHNESS_WINDOW_MS = 5 * 60 * 1000
+
 // Rate-limit key prefix for 2FA verification (separate from login attempts).
 // The full key is `${RATE_LIMIT_PREFIX}${session.user.id}` — keyed by the
 // JWT subject id, NOT the request body email. This prevents an attacker
@@ -150,6 +156,7 @@ export async function POST(request: Request) {
             twoFactorEnabled: true,
             twoFactorSecret: true,
             twoFactorBackupCodes: true,
+            lastTwoFactorVerifiedAt: true,
           },
         })
       : await prisma.whitelistUser.findUnique({
@@ -159,6 +166,7 @@ export async function POST(request: Request) {
             twoFactorEnabled: true,
             twoFactorSecret: true,
             twoFactorBackupCodes: true,
+            lastTwoFactorVerifiedAt: true,
           },
         })
 
@@ -187,49 +195,117 @@ export async function POST(request: Request) {
       }
       verified = verifyTOTP(decryptedSecret, normalizedToken)
     } else if (isBackupCode && user.twoFactorBackupCodes) {
-      let backupCodes: string[]
-      try {
-        backupCodes = decryptBackupCodes(user.twoFactorBackupCodes)
-      } catch {
-        return NextResponse.json(
-          { error: 'Failed to decrypt backup codes' },
-          { status: 500 },
+      // 11a. Consume the backup code with optimistic concurrency (CAS on the
+      //      encrypted blob): the codes array is a read-modify-write, and two
+      //      concurrent verifications would otherwise lose updates or
+      //      resurrect consumed codes. Each attempt's WHERE pins the exact
+      //      blob it decoded; only `count === 1` is a successful consumption.
+      //      The code removal and the verification timestamp (Issue #123)
+      //      stay in a single write: a partial commit would burn the code
+      //      without granting the 5-minute session-refresh window the client
+      //      needs to complete the sign-in.
+      const isRecentlyVerified = (at: Date | null | undefined): boolean =>
+        at != null && Date.now() - at.getTime() < TWO_FACTOR_FRESHNESS_WINDOW_MS
+      // A missing code with a fresh server-side verification is (almost
+      // certainly) this user's own earlier attempt whose response was lost —
+      // e.g. a rejected fetch, a proxy 5xx, or a reload that dropped the
+      // client's recovery state. Answer with a machine-readable RETRY_SYNC
+      // (no rate-limit side effects in either direction) so the client
+      // finishes via the session sync instead of burning attempts. Guessing
+      // is not helped: every unknown code gets the identical response while
+      // the window is open, and a real, unconsumed code is still required
+      // once it closes.
+      const retrySyncResponse = () =>
+        NextResponse.json(
+          { error: 'Verification already recorded', code: 'RETRY_SYNC' },
+          { status: 409 },
         )
-      }
 
-      let codeIndex = -1
-      for (let i = 0; i < backupCodes.length; i++) {
-        if (timingSafeCompare(backupCodes[i], normalizedToken)) {
-          codeIndex = i
+      let currentBlob: string = user.twoFactorBackupCodes
+      let currentLastVerifiedAt: Date | null = user.lastTwoFactorVerifiedAt
+
+      for (let attempt = 1; ; attempt++) {
+        let backupCodes: string[]
+        try {
+          backupCodes = decryptBackupCodes(currentBlob)
+        } catch {
+          return NextResponse.json(
+            { error: 'Failed to decrypt backup codes' },
+            { status: 500 },
+          )
+        }
+
+        let codeIndex = -1
+        for (let i = 0; i < backupCodes.length; i++) {
+          if (timingSafeCompare(backupCodes[i], normalizedToken)) {
+            codeIndex = i
+            break
+          }
+        }
+
+        if (codeIndex === -1) {
+          if (isRecentlyVerified(currentLastVerifiedAt)) {
+            return retrySyncResponse()
+          }
+          // Definitely invalid: absent from the freshest read with no recent
+          // verification — fall through to the normal 401 (+ failed-attempt
+          // recording) below.
           break
         }
-      }
 
-      if (codeIndex !== -1) {
-        verified = true
-        usedBackupCode = true
-
-        // 11a. Consume the used backup code AND record the verification
-        //      timestamp (Issue #123) in a single write: a partial commit
-        //      (code consumed but timestamp missing) would burn the code
-        //      without granting the 5-minute session-refresh window the
-        //      client needs to complete the sign-in.
         backupCodes.splice(codeIndex, 1)
         const backupCodeUpdate = {
           twoFactorBackupCodes: encryptBackupCodes(backupCodes),
           lastTwoFactorVerifiedAt: new Date(),
         }
-        if (isAdmin) {
-          await prisma.admin.update({
-            where: { id: user.id },
-            data: backupCodeUpdate,
-          })
-        } else {
-          await prisma.whitelistUser.update({
-            where: { id: user.id },
-            data: backupCodeUpdate,
-          })
+        const { count } = isAdmin
+          ? await prisma.admin.updateMany({
+              where: { id: user.id, twoFactorBackupCodes: currentBlob },
+              data: backupCodeUpdate,
+            })
+          : await prisma.whitelistUser.updateMany({
+              where: { id: user.id, twoFactorBackupCodes: currentBlob },
+              data: backupCodeUpdate,
+            })
+        if (count === 1) {
+          verified = true
+          usedBackupCode = true
+          break
         }
+
+        // CAS conflict: a concurrent write landed between our read and our
+        // update. Retry exactly once against the freshest row; a second
+        // conflict returns 503 (no rate-limit side effects — nothing was
+        // proven invalid) and the client recovers via update-first.
+        if (attempt >= 2) {
+          return NextResponse.json(
+            { error: 'Concurrent verification conflict' },
+            { status: 503 },
+          )
+        }
+        const fresh = isAdmin
+          ? await prisma.admin.findUnique({
+              where: { id: user.id },
+              select: {
+                twoFactorBackupCodes: true,
+                lastTwoFactorVerifiedAt: true,
+              },
+            })
+          : await prisma.whitelistUser.findUnique({
+              where: { id: user.id },
+              select: {
+                twoFactorBackupCodes: true,
+                lastTwoFactorVerifiedAt: true,
+              },
+            })
+        if (!fresh?.twoFactorBackupCodes) {
+          if (isRecentlyVerified(fresh?.lastTwoFactorVerifiedAt)) {
+            return retrySyncResponse()
+          }
+          break
+        }
+        currentBlob = fresh.twoFactorBackupCodes
+        currentLastVerifiedAt = fresh.lastTwoFactorVerifiedAt
       }
     }
 

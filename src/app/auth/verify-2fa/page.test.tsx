@@ -491,7 +491,7 @@ describe('Verify2FAPage recovery gating and subject binding', () => {
     // dispatched token would make the same-code assertion vacuous.
     {
       const lease = tryAcquireTwoFactorLease(SUBJECT)
-      markVerifyDispatched(lease, SUBJECT, '123456', 'totp')
+      markVerifyDispatched(lease, SUBJECT, '123456')
       markVerifyServerVerified(lease, SUBJECT)
       releaseTwoFactorLease(lease)
     }
@@ -555,6 +555,23 @@ describe('Verify2FAPage recovery gating and subject binding', () => {
     await waitFor(() => expect(input.disabled).toBe(false))
     expect(update).toHaveBeenCalledTimes(1)
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('treats a RETRY_SYNC conflict as a committed verification and completes with the fragment', async () => {
+    const { replace, update } = setup2FASession('/groups/vf-rs')
+    statusFetch(409, {
+      error: 'Verification already recorded',
+      code: 'RETRY_SYNC',
+    })
+    setPendingFragment('/groups/vf-rs', 'KEYrs', SUBJECT)
+
+    render(<Verify2FAPage />)
+    typeToken('123456')
+
+    await waitFor(() =>
+      expect(replace).toHaveBeenCalledWith('/groups/vf-rs#KEYrs'),
+    )
+    expect(update).toHaveBeenCalledTimes(1)
   })
 
   it('treats an ALREADY_VERIFIED rejection as success and completes with the fragment', async () => {
