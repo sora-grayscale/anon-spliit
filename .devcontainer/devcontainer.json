@@ -11,9 +11,12 @@
     // },
 
     // Use 'postCreateCommand' to run commands after the container is created.
-    "postCreateCommand": "cp container.env.example .env && npm install",
+    // corepack enable needs root (/usr/local/bin); the devcontainer node user
+    // has passwordless sudo. pnpm is pinned to the same version as
+    // package.json's packageManager and the Dockerfile.
+    "postCreateCommand": "cp container.env.example .env && sudo corepack enable && corepack prepare pnpm@11.13.0 --activate && pnpm install",
     "postAttachCommand": {
-    	"npm": "npm run dev"
+    	"pnpm": "pnpm run dev"
     },
 
     // Use 'forwardPorts' to make a list of ports inside the container available locally.

@@ -3,15 +3,15 @@
 # Multi-stage build for Next.js with pnpm
 # ===========================================
 
-FROM node:21-alpine AS base
+FROM node:22-alpine AS base
 
 # Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@11.13.0 --activate
 
 WORKDIR /usr/app
 
 # Copy package files
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY prisma ./prisma
 
 # Install dependencies (--ignore-scripts skips postinstall which requires DB)
@@ -36,13 +36,13 @@ RUN pnpm build && rm -rf .next/cache
 # ===========================================
 # Runtime dependencies stage
 # ===========================================
-FROM node:21-alpine AS runtime-deps
+FROM node:22-alpine AS runtime-deps
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@11.13.0 --activate
 
 WORKDIR /usr/app
 
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY prisma ./prisma
 
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts && \
@@ -51,9 +51,9 @@ RUN pnpm install --frozen-lockfile --prod --ignore-scripts && \
 # ===========================================
 # Runner stage
 # ===========================================
-FROM node:21-alpine AS runner
+FROM node:22-alpine AS runner
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@11.13.0 --activate
 
 EXPOSE 3000/tcp
 WORKDIR /usr/app

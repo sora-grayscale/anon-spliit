@@ -4,8 +4,8 @@ Set up anon-spliit for local development.
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/) 18+
-- [pnpm](https://pnpm.io/) package manager
+- [Node.js](https://nodejs.org/) 22.13+ (22.x)
+- [pnpm](https://pnpm.io/) 11 package manager (installed automatically if you use corepack)
 - [Docker](https://www.docker.com/) or [Podman](https://podman.io/) (for PostgreSQL)
 
 ## Quick Start

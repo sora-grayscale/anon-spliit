@@ -1,0 +1,11 @@
+# pnpm settings (pnpm 11+ no longer reads the package.json "pnpm" field or
+# non-auth settings from .npmrc; this file is their new home).
+engineStrict: true
+
+overrides:
+  '@babel/core': ^7.29.6
+  defu: 6.1.5
+  effect: ^3.20.0
+  'picomatch@<2.3.2': 2.3.2
+  'picomatch@>=4.0.0 <4.0.4': 4.0.4
+  postcss: ^8.5.16
