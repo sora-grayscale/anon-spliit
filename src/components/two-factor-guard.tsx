@@ -79,7 +79,10 @@ function TwoFactorGuardContent({ children }: { children: React.ReactNode }) {
       // would otherwise be dropped. The store ignores empty writes, so an
       // effect re-run after router.push has already stripped the hash cannot
       // clobber the capture.
-      setPendingFragment(pathname, window.location.hash.slice(1))
+      setPendingFragment(pathname, window.location.hash.slice(1), {
+        id: session.user.id,
+        isAdmin: session.user.isAdmin,
+      })
       const callbackUrl = encodeURIComponent(pathname)
       router.push(`/auth/verify-2fa?callbackUrl=${callbackUrl}`)
       return

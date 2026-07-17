@@ -104,10 +104,21 @@ function makeSession({
 }
 
 function makeRequest(body: unknown): Request {
+  // The route requires the body subject ({subjectId, subjectIsAdmin}) to
+  // match the session subject; default to the default session's subject so
+  // tests only override what they exercise.
+  const payload =
+    typeof body === 'string'
+      ? body
+      : JSON.stringify({
+          subjectId: 'u1',
+          subjectIsAdmin: false,
+          ...(body as Record<string, unknown>),
+        })
   return new Request('http://localhost/api/2fa/verify', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: typeof body === 'string' ? body : JSON.stringify(body),
+    body: payload,
   })
 }
 
@@ -205,7 +216,57 @@ describe('POST /api/2fa/verify — subject binding (Issue #174)', () => {
     expectZeroSideEffects()
   })
 
-  it('7: returns 400 Already verified when requiresTwoFactor is false', async () => {
+  it('6b: returns 401 when the body subject id does not match the session (no side effects)', async () => {
+    // Same email can exist on both the Admin and WhitelistUser tables: an
+    // outcome must never be attributable to a subject the session does not
+    // prove.
+    mockedAuth.mockResolvedValue(makeSession({ email: 'u@example.com' }))
+    const { POST } = await import('@/app/api/2fa/verify/route')
+    const res = await POST(
+      makeRequest({
+        email: 'u@example.com',
+        token: '123456',
+        subjectId: 'someone-else',
+      }),
+    )
+    expect(res.status).toBe(401)
+    expect(await res.json()).toEqual({ error: 'Invalid request' })
+    expect(mockedCheckRateLimitAsync).not.toHaveBeenCalled()
+    expectZeroSideEffects()
+  })
+
+  it('6c: returns 401 when the body subject role does not match the session', async () => {
+    mockedAuth.mockResolvedValue(makeSession({ email: 'u@example.com' }))
+    const { POST } = await import('@/app/api/2fa/verify/route')
+    const res = await POST(
+      makeRequest({
+        email: 'u@example.com',
+        token: '123456',
+        subjectIsAdmin: true,
+      }),
+    )
+    expect(res.status).toBe(401)
+    expect(await res.json()).toEqual({ error: 'Invalid request' })
+    expect(mockedCheckRateLimitAsync).not.toHaveBeenCalled()
+    expectZeroSideEffects()
+  })
+
+  it('6d: returns 400 when the body subject fields are missing or mistyped', async () => {
+    const { POST } = await import('@/app/api/2fa/verify/route')
+    const res = await POST(
+      makeRequest({
+        email: 'u@example.com',
+        token: '123456',
+        subjectId: 42,
+      }),
+    )
+    expect(res.status).toBe(400)
+    expect(await res.json()).toEqual({ error: 'Invalid request' })
+    expect(mockedAuth).not.toHaveBeenCalled()
+    expectZeroSideEffects()
+  })
+
+  it('7: returns 400 Already verified (machine-readable code) when requiresTwoFactor is false', async () => {
     mockedAuth.mockResolvedValue(
       makeSession({ email: 'u@example.com', requiresTwoFactor: false }),
     )
@@ -214,7 +275,12 @@ describe('POST /api/2fa/verify — subject binding (Issue #174)', () => {
       makeRequest({ email: 'u@example.com', token: '123456' }),
     )
     expect(res.status).toBe(400)
-    expect(await res.json()).toEqual({ error: 'Already verified' })
+    // The code lets the client treat this as the success it is; subject
+    // match is guaranteed because the check above (6b/6c) runs first.
+    expect(await res.json()).toEqual({
+      error: 'Already verified',
+      code: 'ALREADY_VERIFIED',
+    })
     expect(mockedCheckRateLimitAsync).not.toHaveBeenCalled()
     expectZeroSideEffects()
   })
@@ -261,7 +327,12 @@ describe('POST /api/2fa/verify — subject binding (Issue #174)', () => {
     mockedVerifyTOTP.mockReturnValue(true)
     const { POST } = await import('@/app/api/2fa/verify/route')
     const res = await POST(
-      makeRequest({ email: 'admin@example.com', token: '123456' }),
+      makeRequest({
+        email: 'admin@example.com',
+        token: '123456',
+        subjectId: 'a1',
+        subjectIsAdmin: true,
+      }),
     )
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({

@@ -66,7 +66,14 @@ export async function POST(request: Request) {
     //    for a security endpoint.
     const email = (body as { email?: unknown }).email
     const token = (body as { token?: unknown }).token
-    if (typeof email !== 'string' || typeof token !== 'string') {
+    const subjectId = (body as { subjectId?: unknown }).subjectId
+    const subjectIsAdmin = (body as { subjectIsAdmin?: unknown }).subjectIsAdmin
+    if (
+      typeof email !== 'string' ||
+      typeof token !== 'string' ||
+      typeof subjectId !== 'string' ||
+      typeof subjectIsAdmin !== 'boolean'
+    ) {
       return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
     }
 
@@ -77,15 +84,31 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid request' }, { status: 401 })
     }
 
-    // 5. `body.email` must match the session subject (client tamper check).
-    if (session.user.email !== email) {
+    // 5. `body.email` AND the body subject ({id, isAdmin}) must match the
+    //    session subject. The subject check is what lets the client trust
+    //    the attribution of any non-4xx outcome (and of ALREADY_VERIFIED
+    //    below): emails are not unique across the Admin and WhitelistUser
+    //    tables, so if the session cookie has meanwhile switched to a
+    //    same-email different subject, this request must fail with no side
+    //    effects instead of verifying (or reporting on) the wrong account.
+    if (
+      session.user.email !== email ||
+      session.user.id !== subjectId ||
+      session.user.isAdmin !== subjectIsAdmin
+    ) {
       return NextResponse.json({ error: 'Invalid request' }, { status: 401 })
     }
 
     // 6. Session must still require 2FA — if `requiresTwoFactor` is false
-    //    the user has already completed verification for this login.
+    //    the user has already completed verification for this login. The
+    //    machine-readable code lets the client treat this as the success it
+    //    is (subject match is already guaranteed by step 5) instead of a
+    //    rejection that would discard its recovery state.
     if (!session.user.requiresTwoFactor) {
-      return NextResponse.json({ error: 'Already verified' }, { status: 400 })
+      return NextResponse.json(
+        { error: 'Already verified', code: 'ALREADY_VERIFIED' },
+        { status: 400 },
+      )
     }
 
     // 7. Token format — normalize then validate shape.

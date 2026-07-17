@@ -13,6 +13,6 @@ import { tryAcquireTwoFactorLease } from '@/lib/two-factor-verify-flow'
 describe('two-factor-verify-flow on the server', () => {
   it('never grants a lease', () => {
     expect(typeof window).toBe('undefined')
-    expect(tryAcquireTwoFactorLease()).toBeNull()
+    expect(tryAcquireTwoFactorLease({ id: 'srv', isAdmin: false })).toBeNull()
   })
 })

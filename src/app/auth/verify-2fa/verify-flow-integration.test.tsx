@@ -55,6 +55,8 @@ const mockedUseSearchParams = useSearchParams as jest.MockedFunction<
   typeof useSearchParams
 >
 
+const SUBJECT = { id: 'u1', isAdmin: false }
+
 function setupSession(callbackUrl: string) {
   const replace = jest.fn()
   mockedUseRouter.mockReturnValue({ replace } as never)
@@ -131,7 +133,7 @@ function typeTotp(value: string) {
 
 function resetFlowState() {
   invalidateTwoFactorFlow()
-  const lease = tryAcquireTwoFactorLease()
+  const lease = tryAcquireTwoFactorLease(null)
   markVerifyIdle(lease)
   releaseTwoFactorLease(lease)
 }
@@ -145,7 +147,7 @@ describe('verify-flow transaction across a TOTP <-> backup page switch', () => {
   it('lets the in-flight transaction finish after the page switch: one navigation, fragment consumed once, no / bounce', async () => {
     const { replace, update } = setupSession('/groups/x1')
     const { fetchMock, resolveOk } = deferredFetch()
-    setPendingFragment('/groups/x1', 'KEYx1')
+    setPendingFragment('/groups/x1', 'KEYx1', SUBJECT)
 
     const totp = render(<Verify2FAPage />)
     typeTotp('123456')
@@ -165,13 +167,13 @@ describe('verify-flow transaction across a TOTP <-> backup page switch', () => {
     expect(replace).toHaveBeenCalledTimes(1)
     expect(replace).not.toHaveBeenCalledWith('/')
     // One-shot: the transaction consumed the fragment exactly once.
-    expect(takePendingFragment('/groups/x1')).toBeNull()
+    expect(takePendingFragment('/groups/x1', SUBJECT)).toBeNull()
   })
 
   it('joins a second submit into the in-flight transaction: no extra fetch, one navigation', async () => {
     const { replace, update } = setupSession('/groups/x2')
     const { fetchMock, resolveOk } = deferredFetch()
-    setPendingFragment('/groups/x2', 'KEYx2')
+    setPendingFragment('/groups/x2', 'KEYx2', SUBJECT)
 
     const totp = render(<Verify2FAPage />)
     typeTotp('123456')
@@ -197,13 +199,13 @@ describe('verify-flow transaction across a TOTP <-> backup page switch', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(update).toHaveBeenCalledTimes(1)
     expect(replace).toHaveBeenCalledTimes(1)
-    expect(takePendingFragment('/groups/x2')).toBeNull()
+    expect(takePendingFragment('/groups/x2', SUBJECT)).toBeNull()
   })
 
   it('strips ownership when the user leaves the flow: the orphaned closure must not update, navigate, or consume the fragment', async () => {
     const { replace, update } = setupSession('/groups/x3')
     const { fetchMock, resolveOk } = deferredFetch()
-    setPendingFragment('/groups/x3', 'KEYx3')
+    setPendingFragment('/groups/x3', 'KEYx3', SUBJECT)
 
     const totp = render(<Verify2FAPage />)
     typeTotp('123456')
@@ -221,13 +223,13 @@ describe('verify-flow transaction across a TOTP <-> backup page switch', () => {
     expect(update).not.toHaveBeenCalled()
     expect(replace).not.toHaveBeenCalled()
     // The parked fragment must survive untouched.
-    expect(takePendingFragment('/groups/x3')).toBe('KEYx3')
+    expect(takePendingFragment('/groups/x3', SUBJECT)).toBe('KEYx3')
   })
 
   it('does not let the other page bounce to / when the session flips while the old POST is in flight', async () => {
     const session = setupSession('/groups/x4')
     const { fetchMock, resolveOk } = deferredFetch()
-    setPendingFragment('/groups/x4', 'KEYx4')
+    setPendingFragment('/groups/x4', 'KEYx4', SUBJECT)
 
     const totp = render(<Verify2FAPage />)
     typeTotp('123456')
@@ -255,7 +257,7 @@ describe('verify-flow transaction across a TOTP <-> backup page switch', () => {
     setupSession('/groups/x5')
 
     // Simulates a transaction owned by the other page being in flight.
-    const foreign = tryAcquireTwoFactorLease()
+    const foreign = tryAcquireTwoFactorLease(SUBJECT)
     expect(foreign).not.toBeNull()
 
     render(
@@ -266,6 +268,8 @@ describe('verify-flow transaction across a TOTP <-> backup page switch', () => {
     await act(async () => {})
 
     expect(isTwoFactorLeaseOwner(foreign)).toBe(true)
-    releaseTwoFactorLease(foreign)
+    await act(async () => {
+      releaseTwoFactorLease(foreign)
+    })
   })
 })

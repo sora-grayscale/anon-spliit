@@ -37,12 +37,14 @@ const mockedUseSession = useSession as jest.MockedFunction<typeof useSession>
 const mockedUseRouter = useRouter as jest.MockedFunction<typeof useRouter>
 const mockedUsePathname = usePathname as jest.MockedFunction<typeof usePathname>
 
+const GUARD_SUBJECT = { id: 'g1', isAdmin: false }
+
 function setup(pathname: string, hash: string) {
   const push = jest.fn()
   mockedUseRouter.mockReturnValue({ push } as never)
   mockedUsePathname.mockReturnValue(pathname)
   mockedUseSession.mockReturnValue({
-    data: { user: { requiresTwoFactor: true } },
+    data: { user: { id: 'g1', isAdmin: false, requiresTwoFactor: true } },
     status: 'authenticated',
   } as never)
   window.location.hash = hash
@@ -76,17 +78,17 @@ describe('TwoFactorGuard fragment capture', () => {
     for (const call of push.mock.calls) {
       expect(String(call[0])).not.toContain('KEYcap')
     }
-    expect(takePendingFragment('/groups/cap')).toBe('KEYcap')
+    expect(takePendingFragment('/groups/cap', GUARD_SUBJECT)).toBe('KEYcap')
   })
 
   it('leaves a previously parked fragment intact when the hash is empty', () => {
     // Simulates the effect re-running after router.push already stripped the
     // hash from the address bar: the earlier capture must survive.
-    setPendingFragment('/groups/empty', 'KEYempty')
+    setPendingFragment('/groups/empty', 'KEYempty', GUARD_SUBJECT)
     setup('/groups/empty', '')
     renderGuard((node) => <>{node}</>)
 
-    expect(takePendingFragment('/groups/empty')).toBe('KEYempty')
+    expect(takePendingFragment('/groups/empty', GUARD_SUBJECT)).toBe('KEYempty')
   })
 
   it('parks exactly one copy under StrictMode effect replay', () => {
@@ -94,9 +96,11 @@ describe('TwoFactorGuard fragment capture', () => {
     renderGuard((node) => <StrictMode>{node}</StrictMode>)
 
     expect(push).toHaveBeenCalled()
-    expect(takePendingFragment('/groups/strict')).toBe('KEYstrict')
+    expect(takePendingFragment('/groups/strict', GUARD_SUBJECT)).toBe(
+      'KEYstrict',
+    )
     // One-shot: the replayed effect must not have left a second copy behind.
-    expect(takePendingFragment('/groups/strict')).toBeNull()
+    expect(takePendingFragment('/groups/strict', GUARD_SUBJECT)).toBeNull()
   })
 })
 
@@ -104,7 +108,7 @@ describe('TwoFactorGuard verify-flow invalidation', () => {
   it('invalidates an active verify lease on a commit outside the flow', () => {
     // An in-flight verify transaction (its page just unmounted) must lose
     // ownership the moment the app lands anywhere outside /auth/verify-2fa.
-    const lease = tryAcquireTwoFactorLease()
+    const lease = tryAcquireTwoFactorLease(GUARD_SUBJECT)
     setup('/groups/leave', '')
     renderGuard((node) => <>{node}</>)
 
@@ -115,7 +119,7 @@ describe('TwoFactorGuard verify-flow invalidation', () => {
     // Inside the flow (TOTP <-> backup switches) the transaction survives;
     // a StrictMode layout-effect replay must not release someone else's
     // lease either.
-    const lease = tryAcquireTwoFactorLease()
+    const lease = tryAcquireTwoFactorLease(GUARD_SUBJECT)
     setup('/auth/verify-2fa', '')
     renderGuard((node) => <StrictMode>{node}</StrictMode>)
 

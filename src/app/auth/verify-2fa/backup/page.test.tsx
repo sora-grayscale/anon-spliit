@@ -43,7 +43,7 @@ import {
   releaseTwoFactorLease,
   tryAcquireTwoFactorLease,
 } from '@/lib/two-factor-verify-flow'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
@@ -103,6 +103,12 @@ function setup2FASession(
   return { replace, update }
 }
 
+function rejectingFetch() {
+  const fetchMock = jest.fn(() => Promise.reject(new Error('offline')))
+  global.fetch = fetchMock as unknown as typeof fetch
+  return fetchMock
+}
+
 function succeedingFetch() {
   const fetchMock = jest.fn(() =>
     Promise.resolve({
@@ -136,7 +142,7 @@ function submitCode(code: string) {
 
 function resetFlowState() {
   invalidateTwoFactorFlow()
-  const lease = tryAcquireTwoFactorLease()
+  const lease = tryAcquireTwoFactorLease(null)
   markVerifyIdle(lease)
   releaseTwoFactorLease(lease)
 }
@@ -151,7 +157,7 @@ describe('BackupCodePage fragment restoration', () => {
   it('re-attaches the parked fragment (E2EE key) to the callback URL after success', async () => {
     const { replace } = setup2FASession('/groups/bk')
     succeedingFetch()
-    setPendingFragment('/groups/bk', 'KEYbk')
+    setPendingFragment('/groups/bk', 'KEYbk', SUBJECT)
 
     render(<BackupCodePage />)
     submitCode('ABCD1234')
@@ -191,7 +197,7 @@ describe('BackupCodePage fragment restoration', () => {
       updateBehavior: 'null',
     })
     succeedingFetch()
-    setPendingFragment('/groups/bk-upnull', 'KEYbkupnull')
+    setPendingFragment('/groups/bk-upnull', 'KEYbkupnull', SUBJECT)
 
     render(<BackupCodePage />)
     submitCode('ABCD1234')
@@ -201,7 +207,9 @@ describe('BackupCodePage fragment restoration', () => {
     )
     expect(replace).not.toHaveBeenCalled()
     // The parked fragment must survive for the retry.
-    expect(takePendingFragment('/groups/bk-upnull')).toBe('KEYbkupnull')
+    expect(takePendingFragment('/groups/bk-upnull', SUBJECT)).toBe(
+      'KEYbkupnull',
+    )
   })
 
   it('treats a truthy session with requiresTwoFactor still true as a failure', async () => {
@@ -209,7 +217,7 @@ describe('BackupCodePage fragment restoration', () => {
       updateBehavior: 'staleTrue',
     })
     succeedingFetch()
-    setPendingFragment('/groups/bk-stale', 'KEYbkstale')
+    setPendingFragment('/groups/bk-stale', 'KEYbkstale', SUBJECT)
 
     render(<BackupCodePage />)
     submitCode('ABCD1234')
@@ -218,13 +226,13 @@ describe('BackupCodePage fragment restoration', () => {
       expect(screen.getByText('backup.errors.networkError')).toBeTruthy(),
     )
     expect(replace).not.toHaveBeenCalled()
-    expect(takePendingFragment('/groups/bk-stale')).toBe('KEYbkstale')
+    expect(takePendingFragment('/groups/bk-stale', SUBJECT)).toBe('KEYbkstale')
   })
 
   it('recovers from a post-commit 5xx via update() without re-sending the consumed code', async () => {
     const { replace, update } = setup2FASession('/groups/bk-5xx')
     const fetchMock = statusFetch(500, {})
-    setPendingFragment('/groups/bk-5xx', 'KEYbk5xx')
+    setPendingFragment('/groups/bk-5xx', 'KEYbk5xx', SUBJECT)
 
     render(<BackupCodePage />)
     submitCode('ABCD1234')
@@ -255,7 +263,7 @@ describe('BackupCodePage fragment restoration', () => {
       } as unknown as Response),
     )
     global.fetch = fetchMock as unknown as typeof fetch
-    setPendingFragment('/groups/bk-parse', 'KEYbkparse')
+    setPendingFragment('/groups/bk-parse', 'KEYbkparse', SUBJECT)
 
     render(<BackupCodePage />)
     submitCode('ABCD1234')
@@ -276,9 +284,11 @@ describe('BackupCodePage fragment restoration', () => {
     await waitFor(() =>
       expect(screen.getByText('backup.errors.invalidLength')).toBeTruthy(),
     )
-    const lease = tryAcquireTwoFactorLease()
-    expect(lease).not.toBeNull()
-    releaseTwoFactorLease(lease)
+    await act(async () => {
+      const lease = tryAcquireTwoFactorLease(SUBJECT)
+      expect(lease).not.toBeNull()
+      releaseTwoFactorLease(lease)
+    })
   })
 })
 
@@ -293,10 +303,10 @@ describe('BackupCodePage redirect-away behavior', () => {
   })
 
   it('completes a recovered verification with the callback + fragment instead of bouncing to /', async () => {
-    const lease = tryAcquireTwoFactorLease()
+    const lease = tryAcquireTwoFactorLease(SUBJECT)
     markVerifyServerVerified(lease, SUBJECT)
     releaseTwoFactorLease(lease)
-    setPendingFragment('/groups/bk-rc', 'KEYbkrc')
+    setPendingFragment('/groups/bk-rc', 'KEYbkrc', SUBJECT)
     const { replace } = setup2FASession('/groups/bk-rc', {
       requiresTwoFactor: false,
     })
@@ -319,5 +329,92 @@ describe('BackupCodePage redirect-away behavior', () => {
 
     await waitFor(() => expect(replace).toHaveBeenCalledWith('/'))
     expect(replace).toHaveBeenCalledTimes(1)
+  })
+})
+
+// Round-4 hardening: transport-unsettled backup dispatches, strict
+// fall-through gating, and ALREADY_VERIFIED completion.
+describe('BackupCodePage recovery gating', () => {
+  it('recovers from a rejected backup dispatch via update() only, without re-sending', async () => {
+    const { replace } = setup2FASession('/groups/bk-rej')
+    const fetchMock = rejectingFetch()
+    setPendingFragment('/groups/bk-rej', 'KEYbkrej', SUBJECT)
+
+    render(<BackupCodePage />)
+    submitCode('ABCD1234')
+    await waitFor(() =>
+      expect(screen.getByText('backup.errors.networkError')).toBeTruthy(),
+    )
+
+    // Same code again: update-first succeeds and completes the navigation
+    // without ever re-sending the (possibly consumed) code.
+    fireEvent.click(screen.getByRole('button', { name: 'backup.submit' }))
+    await waitFor(() =>
+      expect(replace).toHaveBeenCalledWith('/groups/bk-rej#KEYbkrej'),
+    )
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('never sends another backup code while a rejected dispatch may still be running', async () => {
+    const { update } = setup2FASession('/groups/bk-uns', {
+      updateBehavior: 'staleTrue',
+    })
+    const fetchMock = rejectingFetch()
+
+    render(<BackupCodePage />)
+    submitCode('ABCD1234')
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    await waitFor(() =>
+      expect(
+        (screen.getByLabelText('backup.codeLabel') as HTMLInputElement)
+          .disabled,
+      ).toBe(false),
+    )
+
+    // The rejected request may STILL be rewriting the codes array
+    // server-side: even a DIFFERENT backup code must not be sent while the
+    // dispatch is unsettled (recover via update() or the TOTP page).
+    submitCode('WXYZ9876')
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
+    await waitFor(() =>
+      expect(
+        (screen.getByLabelText('backup.codeLabel') as HTMLInputElement)
+          .disabled,
+      ).toBe(false),
+    )
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('allows a different code after a 5xx: the request got an answer', async () => {
+    const { update } = setup2FASession('/groups/bk-5xxd', {
+      updateBehavior: 'staleTrue',
+    })
+    const fetchMock = statusFetch(500, {})
+
+    render(<BackupCodePage />)
+    submitCode('ABCD1234')
+    await waitFor(() =>
+      expect(screen.getByText('backup.errors.verificationFailed')).toBeTruthy(),
+    )
+
+    // A 5xx settled the transport (no concurrent rewrite risk); with the
+    // sync channel confirmed healthy, a different code is a fresh attempt.
+    submitCode('WXYZ9876')
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    expect(update).toHaveBeenCalledTimes(1)
+  })
+
+  it('treats an ALREADY_VERIFIED rejection as success and completes with the fragment', async () => {
+    const { replace, update } = setup2FASession('/groups/bk-av')
+    statusFetch(400, { error: 'Already verified', code: 'ALREADY_VERIFIED' })
+    setPendingFragment('/groups/bk-av', 'KEYbkav', SUBJECT)
+
+    render(<BackupCodePage />)
+    submitCode('ABCD1234')
+
+    await waitFor(() =>
+      expect(replace).toHaveBeenCalledWith('/groups/bk-av#KEYbkav'),
+    )
+    expect(update).toHaveBeenCalledTimes(1)
   })
 })

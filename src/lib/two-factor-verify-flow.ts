@@ -2,31 +2,46 @@
  * Client-only module store coordinating the 2FA verification transaction
  * across the TOTP page and the backup-code page.
  *
- * Two pieces of state:
+ * Three pieces of state:
  *
- * - A single exclusive **lease**: exactly one verification transaction may
- *   run at a time across BOTH pages. `tryAcquireTwoFactorLease` never steals
- *   an active lease — a second submit while one is in flight joins it as a
- *   no-op (the in-flight transaction drives the navigation). A transaction
- *   must re-check ownership after every await; a non-owner must not call
- *   `update()`, consume the pending fragment, or navigate. Ownership is only
- *   ended by the owner itself or by `invalidateTwoFactorFlow`, which
+ * - A single exclusive **lease**, bound to the subject that acquired it:
+ *   exactly one verification transaction may run at a time across BOTH
+ *   pages. `tryAcquireTwoFactorLease` never steals a lease held by the SAME
+ *   subject — a second submit while one is in flight joins it as a no-op
+ *   (the in-flight transaction drives the navigation). A DIFFERENT subject
+ *   (account switch in the same browser context, or logout — `null`)
+ *   invalidates the old lease synchronously and acquires a fresh one: the
+ *   previous user's transaction must not survive into the next user's
+ *   session. A transaction must re-check ownership after every await; a
+ *   non-owner must not call `update()`, consume the pending fragment, or
+ *   navigate. Ownership is only ended by the owner itself, by a
+ *   subject-change acquire, or by `invalidateTwoFactorFlow`, which
  *   TwoFactorGuard calls synchronously (layout effect) on the first commit
  *   outside the verify flow. Pages never release the lease on unmount: the
  *   transaction outlives a TOTP <-> backup page switch by design.
  *
  * - A **recovery outcome** bound to the verified subject ({id, isAdmin} —
  *   emails are not unique across the Admin and WhitelistUser tables):
- *   'outcomeUnknown' from the moment a code is dispatched until the server's
- *   answer is known (a rejected fetch or a 5xx may have committed
- *   server-side), 'serverVerified' once a 2xx was observed. Either state
- *   makes the next submit retry the session sync FIRST instead of re-sending
- *   a code — for backup codes a resend would burn a second code or fail on
- *   the consumed one. The dispatched token is remembered so an unknown
- *   outcome never auto-resends the same code. The outcome survives
- *   `invalidateTwoFactorFlow` so a user bounced back into the flow can still
- *   recover; it holds a short-lived one-time code (never E2EE key material)
- *   and is cleared when the flow completes or definitively fails.
+ *   'outcomeUnknown' from the moment a code is dispatched until the
+ *   server's answer is known, 'serverVerified' once a 2xx (or an
+ *   ALREADY_VERIFIED rejection, which is a success in disguise) was
+ *   observed. Either state makes the next submit retry the session sync
+ *   FIRST instead of re-sending a code. The dispatched token and its kind
+ *   are remembered so the same code is never auto-resent, and — because a
+ *   rejected fetch means the request may STILL be running server-side —
+ *   whether the dispatch ever got a response: while a backup-code dispatch
+ *   is transport-unsettled, sending a different backup code could race the
+ *   server's non-CAS read-modify-write of the codes array (lost update /
+ *   code resurrection), so it is blocked. The outcome survives
+ *   `invalidateTwoFactorFlow` so a user bounced back into the flow can
+ *   still recover; it holds a short-lived one-time code (never E2EE key
+ *   material) and is cleared when the flow completes or definitively fails.
+ *
+ * - A monotonically increasing **version**, exposed through a
+ *   subscribe/snapshot pair for `useSyncExternalStore`: the pages' bounce/
+ *   recovery effect must re-arm when the lease state changes, otherwise a
+ *   page that lost a `tryAcquire` race once would never get a second chance
+ *   (lost wakeup) and could render blank forever.
  */
 
 export interface VerifySubject {
@@ -36,23 +51,51 @@ export interface VerifySubject {
 
 export type VerifyOutcome = 'idle' | 'outcomeUnknown' | 'serverVerified'
 
+export type VerifyTokenKind = 'totp' | 'backup'
+
 let leaseSeq = 0
 let activeLease: number | null = null
+let leaseSubjectKey: string | null = null
 
 let outcome: VerifyOutcome = 'idle'
 let outcomeSubjectKey: string | null = null
 let dispatchedToken: string | null = null
+let dispatchedKind: VerifyTokenKind | null = null
+let transportUnsettled = false
 
-function subjectKey(subject: VerifySubject): string {
-  return `${subject.isAdmin ? 'admin' : 'user'}:${subject.id}`
+let version = 0
+const listeners = new Set<() => void>()
+
+function bumpVersion(): void {
+  version++
+  listeners.forEach((listener) => listener())
 }
 
-export function tryAcquireTwoFactorLease(): number | null {
+/** Key for a subject, or for the signed-out state (`null`). */
+export function verifySubjectKey(subject: VerifySubject | null): string {
+  return subject === null
+    ? 'anon'
+    : `${subject.isAdmin ? 'admin' : 'user'}:${subject.id}`
+}
+
+export function tryAcquireTwoFactorLease(
+  subject: VerifySubject | null,
+): number | null {
   // Client-only: a server-side lease would be shared across every request
   // handled by the Node process.
   if (typeof window === 'undefined') return null
-  if (activeLease !== null) return null
+  const key = verifySubjectKey(subject)
+  if (activeLease !== null) {
+    // Same subject: join the in-flight transaction (no steal). A different
+    // subject (account switch / logout) kills it synchronously instead —
+    // its closures become non-owners before they can touch anything.
+    if (leaseSubjectKey === key) return null
+    activeLease = null
+    leaseSubjectKey = null
+  }
   activeLease = ++leaseSeq
+  leaseSubjectKey = key
+  bumpVersion()
   return activeLease
 }
 
@@ -63,6 +106,8 @@ export function isTwoFactorLeaseOwner(lease: number | null): boolean {
 export function releaseTwoFactorLease(lease: number | null): void {
   if (isTwoFactorLeaseOwner(lease)) {
     activeLease = null
+    leaseSubjectKey = null
+    bumpVersion()
   }
 }
 
@@ -70,12 +115,39 @@ export function invalidateTwoFactorFlow(): void {
   // Leaving the verify flow ends any transaction: surviving closures lose
   // ownership and their continuations become no-ops. The recovery outcome is
   // intentionally kept (see module doc).
-  activeLease = null
+  if (activeLease !== null) {
+    activeLease = null
+    leaseSubjectKey = null
+    bumpVersion()
+  }
+}
+
+export function subscribeTwoFactorFlow(listener: () => void): () => void {
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+  }
+}
+
+export function getTwoFactorFlowVersion(): number {
+  return version
+}
+
+export function getTwoFactorFlowServerVersion(): number {
+  return 0
 }
 
 /** True when `path`'s path portion is inside the verify flow. */
 export function isVerifyFlowPath(path: string): boolean {
-  const pathOnly = path.split(/[?#]/)[0]
+  // WHATWG URL normalization collapses dot segments including their
+  // percent-encoded forms (%2e%2e, .%2e, %2e.) — a hand-rolled split would
+  // let a crafted callbackUrl sneak back into the flow and strand the lease.
+  let pathOnly: string
+  try {
+    pathOnly = new URL(path, 'http://localhost').pathname
+  } catch {
+    return false
+  }
   return (
     pathOnly === '/auth/verify-2fa' || pathOnly.startsWith('/auth/verify-2fa/')
   )
@@ -86,21 +158,34 @@ export function markVerifyDispatched(
   lease: number | null,
   subject: VerifySubject,
   token: string,
+  kind: VerifyTokenKind,
 ): void {
   if (!isTwoFactorLeaseOwner(lease)) return
   outcome = 'outcomeUnknown'
-  outcomeSubjectKey = subjectKey(subject)
+  outcomeSubjectKey = verifySubjectKey(subject)
   dispatchedToken = token
+  dispatchedKind = kind
+  transportUnsettled = true
 }
 
-/** Owner-only: a 2xx was observed — the server committed the verification. */
+/**
+ * Owner-only: the dispatch got an HTTP response (any status) — the request
+ * is no longer running server-side.
+ */
+export function markVerifyResponded(lease: number | null): void {
+  if (!isTwoFactorLeaseOwner(lease)) return
+  transportUnsettled = false
+}
+
+/** Owner-only: the server committed the verification for this subject. */
 export function markVerifyServerVerified(
   lease: number | null,
   subject: VerifySubject,
 ): void {
   if (!isTwoFactorLeaseOwner(lease)) return
   outcome = 'serverVerified'
-  outcomeSubjectKey = subjectKey(subject)
+  outcomeSubjectKey = verifySubjectKey(subject)
+  transportUnsettled = false
 }
 
 /** Owner-only: the flow completed or the server definitively rejected. */
@@ -109,10 +194,12 @@ export function markVerifyIdle(lease: number | null): void {
   outcome = 'idle'
   outcomeSubjectKey = null
   dispatchedToken = null
+  dispatchedKind = null
+  transportUnsettled = false
 }
 
 export function getVerifyOutcome(subject: VerifySubject): VerifyOutcome {
-  if (outcome === 'idle' || outcomeSubjectKey !== subjectKey(subject)) {
+  if (outcome === 'idle' || outcomeSubjectKey !== verifySubjectKey(subject)) {
     return 'idle'
   }
   return outcome
@@ -125,7 +212,21 @@ export function wasVerifyTokenDispatched(
 ): boolean {
   return (
     outcome !== 'idle' &&
-    outcomeSubjectKey === subjectKey(subject) &&
+    outcomeSubjectKey === verifySubjectKey(subject) &&
     dispatchedToken === token
+  )
+}
+
+/**
+ * True while a backup-code dispatch for this subject never got a response:
+ * the request may still be running server-side, so sending another backup
+ * code could race the non-CAS rewrite of the codes array.
+ */
+export function isBackupDispatchUnsettled(subject: VerifySubject): boolean {
+  return (
+    outcome === 'outcomeUnknown' &&
+    outcomeSubjectKey === verifySubjectKey(subject) &&
+    transportUnsettled &&
+    dispatchedKind === 'backup'
   )
 }
