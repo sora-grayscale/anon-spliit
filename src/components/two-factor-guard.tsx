@@ -6,10 +6,14 @@
  */
 
 import { setPendingFragment } from '@/lib/pending-fragment'
+import {
+  invalidateTwoFactorFlow,
+  isVerifyFlowPath,
+} from '@/lib/two-factor-verify-flow'
 import { Loader2 } from 'lucide-react'
 import { useSession } from 'next-auth/react'
 import { usePathname, useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useState } from 'react'
 
 interface TwoFactorGuardProps {
   children: React.ReactNode
@@ -41,6 +45,16 @@ function TwoFactorGuardContent({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
   const [isChecking, setIsChecking] = useState(true)
+
+  // Leaving the verify flow ends any in-flight verification transaction.
+  // Layout effect: it must run synchronously with the commit, before pending
+  // promise continuations (microtasks) can resume a surviving closure that
+  // would otherwise still own the lease and consume the parked fragment.
+  useLayoutEffect(() => {
+    if (!isVerifyFlowPath(pathname)) {
+      invalidateTwoFactorFlow()
+    }
+  }, [pathname])
 
   useEffect(() => {
     // Wait for session to load

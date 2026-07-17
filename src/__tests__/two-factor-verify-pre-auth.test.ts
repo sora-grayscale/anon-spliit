@@ -278,14 +278,12 @@ describe('POST /api/2fa/verify — subject binding (Issue #174)', () => {
         twoFactorBackupCodes: true,
       },
     })
-    expect(mockedPrisma.admin.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'a1' },
-        data: expect.objectContaining({
-          lastTwoFactorVerifiedAt: expect.any(Date),
-        }),
-      }),
-    )
+    // TOTP path: exactly one write, timestamp only (no backup-code field).
+    expect(mockedPrisma.admin.update).toHaveBeenCalledTimes(1)
+    expect(mockedPrisma.admin.update).toHaveBeenCalledWith({
+      where: { id: 'a1' },
+      data: { lastTwoFactorVerifiedAt: expect.any(Date) },
+    })
     expect(mockedPrisma.whitelistUser.findUnique).not.toHaveBeenCalled()
     expect(mockedPrisma.whitelistUser.update).not.toHaveBeenCalled()
     expect(mockedClearAttemptsAsync).toHaveBeenCalledWith('2fa-verify:a1')
@@ -323,20 +321,18 @@ describe('POST /api/2fa/verify — subject binding (Issue #174)', () => {
         twoFactorBackupCodes: true,
       },
     })
-    // Two updates: backup-codes splice then lastTwoFactorVerifiedAt.
-    expect(mockedPrisma.whitelistUser.update).toHaveBeenCalledTimes(2)
+    // Single write: backup-code consumption and the verification timestamp
+    // must commit together — a partial commit would burn the code without
+    // granting the 5-minute session-refresh window the client needs to
+    // complete the sign-in.
+    expect(mockedPrisma.whitelistUser.update).toHaveBeenCalledTimes(1)
     expect(mockedPrisma.whitelistUser.update).toHaveBeenCalledWith({
       where: { id: 'u1' },
-      data: { twoFactorBackupCodes: 'enc-codes' },
+      data: {
+        twoFactorBackupCodes: 'enc-codes',
+        lastTwoFactorVerifiedAt: expect.any(Date),
+      },
     })
-    expect(mockedPrisma.whitelistUser.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'u1' },
-        data: expect.objectContaining({
-          lastTwoFactorVerifiedAt: expect.any(Date),
-        }),
-      }),
-    )
     expect(mockedPrisma.admin.findUnique).not.toHaveBeenCalled()
     expect(mockedPrisma.admin.update).not.toHaveBeenCalled()
     expect(mockedClearAttemptsAsync).toHaveBeenCalledWith('2fa-verify:u1')

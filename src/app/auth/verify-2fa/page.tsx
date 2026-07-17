@@ -21,6 +21,17 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { restorePendingFragment } from '@/lib/pending-fragment'
 import { sanitizeCallbackUrl } from '@/lib/safe-callback-url'
+import {
+  getVerifyOutcome,
+  isTwoFactorLeaseOwner,
+  isVerifyFlowPath,
+  markVerifyDispatched,
+  markVerifyIdle,
+  markVerifyServerVerified,
+  releaseTwoFactorLease,
+  tryAcquireTwoFactorLease,
+  wasVerifyTokenDispatched,
+} from '@/lib/two-factor-verify-flow'
 import { AlertCircle, KeyRound, Loader2, ShieldCheck } from 'lucide-react'
 import { useSession } from 'next-auth/react'
 import { useTranslations } from 'next-intl'
@@ -32,7 +43,11 @@ export default function Verify2FAPage() {
   const t = useTranslations('TwoFactorAuth')
   const router = useRouter()
   const searchParams = useSearchParams()
-  const callbackUrl = sanitizeCallbackUrl(searchParams.get('callbackUrl'))
+  const rawCallbackUrl = sanitizeCallbackUrl(searchParams.get('callbackUrl'))
+  // A callback pointing back into the verify flow would keep the navigation
+  // lease active forever (TwoFactorGuard only invalidates it outside the
+  // flow) and strand the user on a blank page; normalize it to '/'.
+  const callbackUrl = isVerifyFlowPath(rawCallbackUrl) ? '/' : rawCallbackUrl
 
   const { data: session, status, update } = useSession()
 
@@ -45,25 +60,35 @@ export default function Verify2FAPage() {
   // once `isLoading` clears. Cleared on user edit so a re-typed code retries.
   const lastAttemptedTokenRef = useRef<string | null>(null)
 
-  // Set while the success handler owns navigation: once update() reflects
-  // requiresTwoFactor=false, the redirect-away effect below re-fires and its
-  // replace('/') would race the success replace and strand the one-shot
-  // parked fragment (E2EE key). Reset if the session refresh fails.
-  const isNavigatingAfterVerifyRef = useRef(false)
-
-  // Redirect if user doesn't require 2FA verification
+  // Bounce direct visitors who don't need 2FA, and complete a recovered
+  // verification. Navigating here requires acquiring the flow lease, so this
+  // can never race an in-flight verification transaction (tryAcquire fails
+  // while one is active, on THIS page or the backup page) and never fires
+  // twice (the acquired lease is only invalidated by TwoFactorGuard after
+  // landing outside the flow).
   useEffect(() => {
     if (status === 'loading') return
+    if (session?.user?.requiresTwoFactor) return
 
-    // The success handler is navigating to the callback URL; the session
-    // refresh flipping requiresTwoFactor must not bounce to '/' instead.
-    if (isNavigatingAfterVerifyRef.current) return
+    const lease = tryAcquireTwoFactorLease()
+    if (lease === null) return
 
-    // If no session or doesn't require 2FA, redirect to home
-    if (!session?.user?.requiresTwoFactor) {
-      router.replace('/')
+    const user = session?.user
+    if (
+      user &&
+      getVerifyOutcome({ id: user.id, isAdmin: user.isAdmin }) !== 'idle'
+    ) {
+      // A verification for this subject reached the server before the
+      // session flipped (the transaction was interrupted): finish its
+      // navigation instead of discarding the parked fragment with a '/'
+      // bounce.
+      markVerifyIdle(lease)
+      router.replace(restorePendingFragment(callbackUrl))
+      return
     }
-  }, [session, status, router])
+
+    router.replace('/')
+  }, [session, status, router, callbackUrl])
 
   // Handle token input - only allow digits and max 6 characters
   const handleTokenChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -81,68 +106,149 @@ export default function Verify2FAPage() {
         e.preventDefault()
       }
 
-      if (token.length !== 6) {
-        setError(t('verify.errors.invalidLength'))
-        return
-      }
+      const user = session?.user
+      if (!user) return
+      const subject = { id: user.id, isAdmin: user.isAdmin }
 
-      // Record the attempted token synchronously before the request. The
-      // auto-submit effect will not re-fire while the ref still equals the
-      // current token, so a fetch rejection cannot loop. Setting it here (in
-      // both auto and manual paths) also makes a StrictMode double-invoke of
-      // the effect a no-op on the second call. Not cleared in catch/finally.
-      lastAttemptedTokenRef.current = token
+      // Exclusive lease: one verification transaction at a time across BOTH
+      // verify pages. A second submit while one is in flight (e.g. after
+      // switching to the backup page mid-request) joins it as a no-op — the
+      // in-flight transaction drives the navigation, and its update() will
+      // settle the session either way.
+      const lease = tryAcquireTwoFactorLease()
+      if (lease === null) return
 
       setIsLoading(true)
       setError(null)
 
       try {
+        const mode = getVerifyOutcome(subject)
+
+        if (mode !== 'idle') {
+          // A previous attempt reached the server ('serverVerified') or its
+          // result is unknown (rejected fetch / 5xx may have committed):
+          // retry the session sync FIRST instead of re-sending a code. A
+          // resend would burn a second backup code or fail on the consumed
+          // one. Success requires the SAME subject with the flag cleared.
+          const updated = await update({ twoFactorVerified: true })
+          if (!isTwoFactorLeaseOwner(lease)) return
+          if (
+            updated?.user?.id === subject.id &&
+            updated?.user?.isAdmin === subject.isAdmin &&
+            updated?.user?.requiresTwoFactor === false
+          ) {
+            markVerifyIdle(lease)
+            router.replace(restorePendingFragment(callbackUrl))
+            return
+          }
+          if (
+            mode === 'serverVerified' ||
+            wasVerifyTokenDispatched(subject, token) ||
+            token.length !== 6
+          ) {
+            // Never auto-resend: 'serverVerified' means the server already
+            // committed, and an unknown outcome must not re-send the same
+            // code. Only a different, complete code falls through to a
+            // fresh attempt.
+            releaseTwoFactorLease(lease)
+            setError(t('verify.errors.networkError'))
+            return
+          }
+          // Fall through: fresh attempt with a different code.
+        } else if (token.length !== 6) {
+          releaseTwoFactorLease(lease)
+          setError(t('verify.errors.invalidLength'))
+          return
+        }
+
+        // Record the attempted token synchronously before the request. The
+        // auto-submit effect will not re-fire while the ref still equals the
+        // current token, so a fetch rejection cannot loop. Setting it here
+        // (in both auto and manual paths) also makes a StrictMode
+        // double-invoke of the effect a no-op on the second call.
+        lastAttemptedTokenRef.current = token
+        markVerifyDispatched(lease, subject, token)
+
         const response = await fetch('/api/2fa/verify', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            email: session?.user?.email,
+            email: user.email,
             token,
           }),
         })
-
-        const data = (await response.json()) as { error?: string }
+        if (!isTwoFactorLeaseOwner(lease)) return
 
         if (!response.ok) {
-          setError(data.error ?? t('verify.errors.verificationFailed'))
-          setToken('')
+          if (response.status >= 400 && response.status < 500) {
+            // Definite rejection — the server recorded no verification.
+            markVerifyIdle(lease)
+            let message: string | null = null
+            try {
+              message =
+                ((await response.json()) as { error?: string }).error ?? null
+            } catch {
+              // The error body is best-effort.
+            }
+            if (!isTwoFactorLeaseOwner(lease)) return
+            releaseTwoFactorLease(lease)
+            setError(message ?? t('verify.errors.verificationFailed'))
+            setToken('')
+            return
+          }
+          // 5xx: the server may have committed before failing (the
+          // rate-limit cleanup runs after the DB writes), so keep
+          // 'outcomeUnknown' — the retry goes update-first and never
+          // auto-resends this code.
+          releaseTwoFactorLease(lease)
+          setError(t('verify.errors.verificationFailed'))
           return
         }
 
-        // From here the success handler owns navigation; set before the
-        // await so the redirect-away effect stays quiet while the session
-        // refresh lands (see the effect above).
-        isNavigatingAfterVerifyRef.current = true
+        // 2xx observed — the server committed. The body is not needed on
+        // success, and a parse failure must not discard that result.
+        markVerifyServerVerified(lease, subject)
 
         // Update session to mark 2FA as verified
-        const updatedSession = await update({ twoFactorVerified: true })
-        if (!updatedSession) {
-          // Session refresh failed: navigating now would bounce back through
-          // the guard and consume the parked fragment for nothing. Keep it
-          // parked and let the user retry.
-          isNavigatingAfterVerifyRef.current = false
+        const updated = await update({ twoFactorVerified: true })
+        if (!isTwoFactorLeaseOwner(lease)) return
+        if (
+          !(
+            updated?.user?.id === subject.id &&
+            updated?.user?.isAdmin === subject.isAdmin &&
+            updated?.user?.requiresTwoFactor === false
+          )
+        ) {
+          // Session refresh failed (or returned a foreign session):
+          // navigating now would bounce back through the guard and consume
+          // the parked fragment for nothing. Keep it parked and keep
+          // 'serverVerified' — the retry syncs the session without touching
+          // the server again.
+          releaseTwoFactorLease(lease)
           setError(t('verify.errors.networkError'))
           return
         }
 
-        // Redirect to callback URL or home, re-attaching the URL fragment
+        markVerifyIdle(lease)
+        // The lease stays active through the navigation; TwoFactorGuard
+        // invalidates it synchronously on the first commit outside the flow.
+        // Redirect to the callback URL, re-attaching the URL fragment
         // (E2EE key) that TwoFactorGuard parked before redirecting here.
         router.replace(restorePendingFragment(callbackUrl))
       } catch {
-        isNavigatingAfterVerifyRef.current = false
+        if (!isTwoFactorLeaseOwner(lease)) return
+        releaseTwoFactorLease(lease)
+        // A rejected fetch after dispatch keeps 'outcomeUnknown' (the
+        // request may have reached the server) — the retry goes
+        // update-first.
         setError(t('verify.errors.networkError'))
       } finally {
         setIsLoading(false)
       }
     },
-    [token, session?.user?.email, t, update, router, callbackUrl],
+    [token, session?.user, t, update, router, callbackUrl],
   )
 
   // Auto-submit when 6 digits are entered. Gated on the ref so it fires only

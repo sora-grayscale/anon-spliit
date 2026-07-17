@@ -186,18 +186,25 @@ export async function POST(request: Request) {
         verified = true
         usedBackupCode = true
 
-        // 11a. Consume the used backup code (DB side effect #1).
+        // 11a. Consume the used backup code AND record the verification
+        //      timestamp (Issue #123) in a single write: a partial commit
+        //      (code consumed but timestamp missing) would burn the code
+        //      without granting the 5-minute session-refresh window the
+        //      client needs to complete the sign-in.
         backupCodes.splice(codeIndex, 1)
-        const encryptedBackupCodes = encryptBackupCodes(backupCodes)
+        const backupCodeUpdate = {
+          twoFactorBackupCodes: encryptBackupCodes(backupCodes),
+          lastTwoFactorVerifiedAt: new Date(),
+        }
         if (isAdmin) {
           await prisma.admin.update({
             where: { id: user.id },
-            data: { twoFactorBackupCodes: encryptedBackupCodes },
+            data: backupCodeUpdate,
           })
         } else {
           await prisma.whitelistUser.update({
             where: { id: user.id },
-            data: { twoFactorBackupCodes: encryptedBackupCodes },
+            data: backupCodeUpdate,
           })
         }
       }
@@ -209,20 +216,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
 
-    // 11b. Record server-side 2FA verification timestamp (Issue #123). The
-    //      JWT callback clears `requiresTwoFactor` when this is within the
-    //      5-minute freshness window.
-    const now = new Date()
-    if (isAdmin) {
-      await prisma.admin.update({
-        where: { id: user.id },
-        data: { lastTwoFactorVerifiedAt: now },
-      })
-    } else {
-      await prisma.whitelistUser.update({
-        where: { id: user.id },
-        data: { lastTwoFactorVerifiedAt: now },
-      })
+    // 11b. Record server-side 2FA verification timestamp (Issue #123) for
+    //      the TOTP path — the backup path wrote it atomically together with
+    //      the code consumption in 11a. The JWT callback clears
+    //      `requiresTwoFactor` when this is within the 5-minute freshness
+    //      window.
+    if (!usedBackupCode) {
+      const now = new Date()
+      if (isAdmin) {
+        await prisma.admin.update({
+          where: { id: user.id },
+          data: { lastTwoFactorVerifiedAt: now },
+        })
+      } else {
+        await prisma.whitelistUser.update({
+          where: { id: user.id },
+          data: { lastTwoFactorVerifiedAt: now },
+        })
+      }
     }
 
     // 11c. Clear rate-limit attempts only AFTER DB side effects have

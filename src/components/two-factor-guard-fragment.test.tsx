@@ -23,6 +23,11 @@ jest.mock('next/navigation', () => ({
 
 import { TwoFactorGuard } from '@/components/two-factor-guard'
 import { setPendingFragment, takePendingFragment } from '@/lib/pending-fragment'
+import {
+  isTwoFactorLeaseOwner,
+  releaseTwoFactorLease,
+  tryAcquireTwoFactorLease,
+} from '@/lib/two-factor-verify-flow'
 import { render } from '@testing-library/react'
 import { useSession } from 'next-auth/react'
 import { usePathname, useRouter } from 'next/navigation'
@@ -92,5 +97,29 @@ describe('TwoFactorGuard fragment capture', () => {
     expect(takePendingFragment('/groups/strict')).toBe('KEYstrict')
     // One-shot: the replayed effect must not have left a second copy behind.
     expect(takePendingFragment('/groups/strict')).toBeNull()
+  })
+})
+
+describe('TwoFactorGuard verify-flow invalidation', () => {
+  it('invalidates an active verify lease on a commit outside the flow', () => {
+    // An in-flight verify transaction (its page just unmounted) must lose
+    // ownership the moment the app lands anywhere outside /auth/verify-2fa.
+    const lease = tryAcquireTwoFactorLease()
+    setup('/groups/leave', '')
+    renderGuard((node) => <>{node}</>)
+
+    expect(isTwoFactorLeaseOwner(lease)).toBe(false)
+  })
+
+  it('keeps a foreign lease across verify-flow commits, incl. StrictMode replay', () => {
+    // Inside the flow (TOTP <-> backup switches) the transaction survives;
+    // a StrictMode layout-effect replay must not release someone else's
+    // lease either.
+    const lease = tryAcquireTwoFactorLease()
+    setup('/auth/verify-2fa', '')
+    renderGuard((node) => <StrictMode>{node}</StrictMode>)
+
+    expect(isTwoFactorLeaseOwner(lease)).toBe(true)
+    releaseTwoFactorLease(lease)
   })
 })
