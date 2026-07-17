@@ -1,4 +1,4 @@
-# pnpm settings (pnpm 10+ no longer reads the package.json "pnpm" field or
+# pnpm settings (pnpm 11+ no longer reads the package.json "pnpm" field or
 # non-auth settings from .npmrc; this file is their new home).
 engineStrict: true
 
